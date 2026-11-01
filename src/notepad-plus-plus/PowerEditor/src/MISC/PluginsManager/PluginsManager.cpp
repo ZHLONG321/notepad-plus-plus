@@ -382,7 +382,27 @@ bool PluginsManager::loadPluginsV2(const TCHAR* dir)
 
 	for (size_t i = 0, len = dllNames.size(); i < len; ++i)
 	{
-		loadPlugin(dllNames[i].c_str());
+		_discoveredModules.push_back(::PathFindFileName(dllNames[i].c_str()));
+	}
+	generic_string startupFile = nppPath;
+	PathAppend(startupFile, TEXT("pluginStartup.ini"));
+	for (const auto& path : dllNames)
+	{
+		const TCHAR* module = ::PathFindFileName(path.c_str());
+		TCHAR mode[16] = {};
+		::GetPrivateProfileString(TEXT("Plugins"), module, TEXT("normal"), mode, 16, startupFile.c_str());
+		bool delayed = generic_stricmp(mode, TEXT("delayed")) == 0;
+		// Visible saved panels must participate in the original restoration path.
+		for (const auto& panel : nppParams.getNppGUI()._dockingData._pluginDockInfo)
+			if (panel._isVisible && generic_stricmp(panel._name.c_str(), module) == 0)
+				delayed = false;
+		if (delayed)
+		{
+			_delayedPlugins.push_back(path);
+			startupTrace("plugin.queued", module);
+		}
+		else
+			loadPlugin(path.c_str());
 	}
 
 	return true;
@@ -445,7 +465,14 @@ bool PluginsManager::removeShortcutByCmdID(int cmdID)
 void PluginsManager::addInMenuFromPMIndex(int i)
 {
     vector<PluginCmdShortcut> & pluginCmdSCList = (NppParameters::getInstance()).getPluginCommandList();
-	::InsertMenu(_hPluginsMenu, i, MF_BYPOSITION | MF_POPUP, (UINT_PTR)_pluginInfos[i]->_pluginMenu, _pluginInfos[i]->_funcName.c_str());
+	if (_pluginInfos[i]->_menuRegistered)
+		return;
+	size_t position = 0;
+	for (const auto* plugin : _pluginInfos)
+		if (plugin->_menuRegistered && startupOrder(plugin->_moduleName) < startupOrder(_pluginInfos[i]->_moduleName))
+			++position;
+	::InsertMenu(_hPluginsMenu, static_cast<UINT>(position), MF_BYPOSITION | MF_POPUP, (UINT_PTR)_pluginInfos[i]->_pluginMenu, _pluginInfos[i]->_funcName.c_str());
+	_pluginInfos[i]->_menuRegistered = true;
 
     unsigned short j = 0;
 	for ( ; j < _pluginInfos[i]->_nbFuncItem ; ++j)
@@ -495,7 +522,7 @@ HMENU PluginsManager::setMenu(HMENU hMenu, const TCHAR *menuName, bool enablePlu
 
 		int i = 1;
 
-		if (nbPlugin > 0)
+		if (nbPlugin > 0 || hasDelayedPlugins())
 			::InsertMenu(_hPluginsMenu, 0, MF_BYPOSITION | MF_SEPARATOR, 0, TEXT(""));
 
 		if (enablePluginAdmin)
@@ -512,6 +539,55 @@ HMENU PluginsManager::setMenu(HMENU hMenu, const TCHAR *menuName, bool enablePlu
 		addInMenuFromPMIndex(static_cast<int32_t>(i));
 	}
 	return _hPluginsMenu;
+}
+
+size_t PluginsManager::startupOrder(const generic_string& module) const
+{
+	for (size_t i = 0; i < _discoveredModules.size(); ++i)
+		if (generic_stricmp(_discoveredModules[i].c_str(), module.c_str()) == 0)
+			return i;
+	return _discoveredModules.size();
+}
+
+size_t PluginsManager::getCommandStartupOrder(int commandID) const
+{
+	const int index = commandID - ID_PLUGINS_CMD;
+	if (index >= 0 && static_cast<size_t>(index) < _pluginsCommands.size())
+		return startupOrder(_pluginsCommands[index]._pluginName);
+	return _discoveredModules.size();
+}
+
+int PluginsManager::loadNextDelayedPlugin()
+{
+	if (!hasDelayedPlugins())
+		return -1;
+	const generic_string path = _delayedPlugins.front();
+	_delayedPlugins.erase(_delayedPlugins.begin());
+	startupTrace("plugin.delayed.begin", ::PathFindFileName(path.c_str()));
+	const int index = loadPlugin(path.c_str());
+	if (index >= 0)
+		addInMenuFromPMIndex(index);
+	return index;
+}
+
+void PluginsManager::restoreShortcutOrder()
+{
+	auto& params = NppParameters::getInstance();
+	auto& commands = params.getPluginCommandList();
+	auto& modified = params.getPluginModifiedKeyIndices();
+	std::vector<unsigned long> modifiedCommands;
+	for (const auto index : modified)
+		if (index < commands.size())
+			modifiedCommands.push_back(commands[index].getID());
+	std::stable_sort(commands.begin(), commands.end(), [this](const PluginCmdShortcut& a, const PluginCmdShortcut& b) {
+		const size_t left = startupOrder(a.getModuleName());
+		const size_t right = startupOrder(b.getModuleName());
+		return left == right ? a.getInternalID() < b.getInternalID() : left < right;
+	});
+	modified.clear();
+	for (size_t i = 0; i < commands.size(); ++i)
+		if (std::find(modifiedCommands.begin(), modifiedCommands.end(), commands[i].getID()) != modifiedCommands.end())
+			modified.push_back(i);
 }
 
 

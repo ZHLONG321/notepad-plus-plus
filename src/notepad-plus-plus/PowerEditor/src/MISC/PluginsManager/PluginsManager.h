@@ -58,6 +58,7 @@ struct PluginInfo
 	int _nbFuncItem = 0;
 	generic_string _moduleName;
 	generic_string _funcName;
+	bool _menuRegistered = false;
 };
 
 struct LoadedDllInfo
@@ -90,6 +91,10 @@ public:
 
     int loadPlugin(const TCHAR *pluginFilePath);
 	bool loadPluginsV2(const TCHAR *dir = NULL);
+	bool hasDelayedPlugins() const { return !_delayedPlugins.empty() && !_noMoreNotification; }
+	int loadNextDelayedPlugin();
+	size_t getCommandStartupOrder(int commandID) const;
+	void restoreShortcutOrder();
 
     bool unloadPlugin(int index, HWND nppHandle);
 
@@ -128,6 +133,9 @@ private:
 	IDAllocator _dynamicIDAlloc;
 	IDAllocator _markerAlloc;
 	bool _noMoreNotification = false;
+	std::vector<generic_string> _discoveredModules;
+	std::vector<generic_string> _delayedPlugins;
+	size_t startupOrder(const generic_string& module) const;
 
 	void pluginCrashAlert(const TCHAR *pluginName, const TCHAR *funcSignature)
 	{

@@ -94,8 +94,9 @@ public :
 		return _toolBarIcons.replaceIcon(whichLst, iconIndex, iconLocation);
 	};
 
-	void registerDynBtn(UINT message, toolbarIcons* iconHandles, HICON absentIco);
-	void registerDynBtnDM(UINT message, toolbarIconsWithDarkMode* iconHandles);
+	void registerDynBtn(UINT message, toolbarIcons* iconHandles, HICON absentIco, size_t startupOrder);
+	void registerDynBtnDM(UINT message, toolbarIconsWithDarkMode* iconHandles, size_t startupOrder);
+	void commitDynamicButtons();
 
 	void doPopop(POINT chevPoint);	//show the popup if buttons are hidden
 
@@ -106,6 +107,8 @@ private :
 	ToolBarIcons _toolBarIcons;
 	toolBarStatusType _state = TB_SMALL;
 	std::vector<DynamicCmdIcoBmp> _vDynBtnReg;
+	bool _dynamicButtonsDirty = false;
+	void registerDynamic(const DynamicCmdIcoBmp& icon);
 	size_t _nbButtons = 0;
 	size_t _nbDynButtons = 0;
 	size_t _nbTotalButtons = 0;

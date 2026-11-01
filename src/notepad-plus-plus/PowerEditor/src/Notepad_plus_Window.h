@@ -61,6 +61,7 @@ public:
 	void init(HINSTANCE, HWND, const TCHAR *cmdLine, CmdLineParams *cmdLineParams);
 
 	bool isDlgsMsg(MSG *msg) const;
+	void onEditorPainted() { _startupEditorPainted = true; }
 
 	HACCEL getAccTable() const {
 		return _notepad_plus_plus_core.getAccTable();
@@ -107,6 +108,11 @@ private:
 	static const TCHAR _className[32];
 	bool _isPrelaunch = false;
 	bool _disablePluginsManager = false;
+	bool _startupEditorPainted = false;
+	bool _startupNoActivate = false;
+	bool _delayedLoadInProgress = false;
+	UINT_PTR _delayedPluginTimer = 0;
+	void loadOneDelayedPlugin();
 
 	QuoteParams _quoteParams; // keep the availability of quote parameters for thread using
 	std::wstring _userQuote; // keep the availability of this string for thread using

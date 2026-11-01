@@ -121,6 +121,13 @@ LRESULT Notepad_plus_Window::runProc(HWND hwnd, UINT message, WPARAM wParam, LPA
 			}
 			break;
 		}
+		case WM_TIMER:
+			if (_delayedPluginTimer && wParam == _delayedPluginTimer)
+			{
+				loadOneDelayedPlugin();
+				return 0;
+			}
+			return _notepad_plus_plus_core.process(hwnd, message, wParam, lParam);
 		default:
 		{
 			if (this)
@@ -2170,13 +2177,13 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case NPPM_ADDTOOLBARICON_DEPRECATED:
 		{
-			_toolBar.registerDynBtn(static_cast<UINT>(wParam), reinterpret_cast<toolbarIcons*>(lParam), _pPublicInterface->getAbsentIcoHandle());
+			_toolBar.registerDynBtn(static_cast<UINT>(wParam), reinterpret_cast<toolbarIcons*>(lParam), _pPublicInterface->getAbsentIcoHandle(), _pluginsManager.getCommandStartupOrder(static_cast<int>(wParam)));
 			return TRUE;
 		}
 
 		case NPPM_ADDTOOLBARICON_FORDARKMODE:
 		{
-			_toolBar.registerDynBtnDM(static_cast<UINT>(wParam), reinterpret_cast<toolbarIconsWithDarkMode*>(lParam));
+			_toolBar.registerDynBtnDM(static_cast<UINT>(wParam), reinterpret_cast<toolbarIconsWithDarkMode*>(lParam), _pluginsManager.getCommandStartupOrder(static_cast<int>(wParam)));
 			return TRUE;
 		}
 

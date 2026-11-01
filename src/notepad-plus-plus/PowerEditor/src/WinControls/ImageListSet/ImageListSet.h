@@ -74,6 +74,7 @@ struct DynamicCmdIcoBmp {
 	HBITMAP _hBmp = nullptr;   // bitmap for toolbar
 	HICON _hIcon = nullptr;    // icon for toolbar
 	HICON _hIcon_DM = nullptr; // dark mode icon for toolbar
+	size_t _startupOrder = static_cast<size_t>(-1);
 };
 
 typedef std::vector<ToolBarButtonUnit> ToolBarIconIDs;
@@ -97,6 +98,7 @@ public :
 	void init(ToolBarButtonUnit *buttonUnitArray, int arraySize, std::vector<DynamicCmdIcoBmp> cmds2add);
 	void create(HINSTANCE hInst, int iconSize);
 	void destroy();
+	void setDynamicIcons(const std::vector<DynamicCmdIcoBmp>& icons);
 
 	HIMAGELIST getDefaultLst() const {
 		return getList(HLIST_DEFAULT);
@@ -154,6 +156,7 @@ private :
 	std::vector<DynamicCmdIcoBmp> _moreCmds;
 
 	HIMAGELIST getList(int index) const;
+	void addDynamicIcons(IconList& list, int index) const;
 	HINSTANCE _hInst = nullptr;
 	int _iconSize = 0;
 	mutable std::vector<IconList> _iconListVector;

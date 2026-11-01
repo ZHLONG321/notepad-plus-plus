@@ -115,6 +115,13 @@ HIMAGELIST ToolBarIcons::getList(int index) const
         }
     }
     startupTrace("toolbar.selected.builtin.icons.ready");
+    addDynamicIcons(list, index);
+    _listDirty[index] = false;
+    return list.getHandle();
+}
+
+void ToolBarIcons::addDynamicIcons(IconList& list, int index) const
+{
     HDC dcScreen = nullptr;
     for (const auto& i : _moreCmds)
     {
@@ -211,8 +218,24 @@ HIMAGELIST ToolBarIcons::getList(int index) const
         if (ownsIcon) ::DestroyIcon(hIcon);
     }
     if (dcScreen) ::ReleaseDC(NULL, dcScreen);
-    _listDirty[index] = false;
-    return list.getHandle();
+}
+
+void ToolBarIcons::setDynamicIcons(const std::vector<DynamicCmdIcoBmp>& icons)
+{
+	_moreCmds = icons;
+	int builtinCount = 0;
+	for (const auto& button : _tbiis)
+		if (button._defaultIcon != -1)
+			++builtinCount;
+	for (size_t index = 0; index < _iconListVector.size(); ++index)
+	{
+		auto& list = _iconListVector[index];
+		if (list.getHandle() && !_listDirty[index])
+		{
+			::ImageList_SetImageCount(list.getHandle(), builtinCount);
+			addDynamicIcons(list, static_cast<int>(index));
+		}
+	}
 }
 
 

@@ -17,6 +17,7 @@
 #include <stdexcept>
 #include "ToolBar.h"
 #include "StartupTrace.h"
+#include <algorithm>
 #include "shortcut.h"
 #include "Parameters.h"
 #include "FindReplaceDlg_rc.h"
@@ -169,6 +170,7 @@ bool ToolBar::init( HINSTANCE hInst, HWND hPere, toolBarStatusType type, ToolBar
 
 	reset(true);	//load icons etc
 	startupTrace("toolbar.reset.ready");
+	_dynamicButtonsDirty = false;
 
 	return true;
 }
@@ -376,10 +378,9 @@ void ToolBar::reset(bool create)
 	}
 }
 
-void ToolBar::registerDynBtn(UINT messageID, toolbarIcons* iconHandles, HICON absentIco)
+void ToolBar::registerDynBtn(UINT messageID, toolbarIcons* iconHandles, HICON absentIco, size_t startupOrder)
 {
-	// Note: Register of buttons only possible before init!
-	if ((_hSelf == NULL) && (messageID != 0) && (iconHandles->hToolbarBmp != NULL))
+	if (iconHandles && (messageID != 0) && (iconHandles->hToolbarBmp != NULL))
 	{
 		DynamicCmdIcoBmp dynList;
 		dynList._message = messageID;
@@ -413,14 +414,14 @@ void ToolBar::registerDynBtn(UINT messageID, toolbarIcons* iconHandles, HICON ab
 
 		dynList._hIcon_DM = dynList._hIcon;
 
-		_vDynBtnReg.push_back(dynList);
+		dynList._startupOrder = startupOrder;
+		registerDynamic(dynList);
 	}
 }
 
-void ToolBar::registerDynBtnDM(UINT messageID, toolbarIconsWithDarkMode* iconHandles)
+void ToolBar::registerDynBtnDM(UINT messageID, toolbarIconsWithDarkMode* iconHandles, size_t startupOrder)
 {
-	// Note: Register of buttons only possible before init!
-	if ((_hSelf == NULL) && (messageID != 0) && (iconHandles->hToolbarBmp != NULL) && 
+	if (iconHandles && (messageID != 0) && (iconHandles->hToolbarBmp != NULL) &&
 		(iconHandles->hToolbarIcon != NULL) && (iconHandles->hToolbarIconDarkMode != NULL))
 	{
 		DynamicCmdIcoBmp dynList;
@@ -428,7 +429,97 @@ void ToolBar::registerDynBtnDM(UINT messageID, toolbarIconsWithDarkMode* iconHan
 		dynList._hBmp = iconHandles->hToolbarBmp;
 		dynList._hIcon = iconHandles->hToolbarIcon;
 		dynList._hIcon_DM = iconHandles->hToolbarIconDarkMode;
-		_vDynBtnReg.push_back(dynList);
+		dynList._startupOrder = startupOrder;
+		registerDynamic(dynList);
+	}
+}
+
+void ToolBar::registerDynamic(const DynamicCmdIcoBmp& icon)
+{
+	for (auto& existing : _vDynBtnReg)
+		if (existing._message == icon._message)
+		{
+			existing = icon;
+			_dynamicButtonsDirty = true;
+			return;
+		}
+	_vDynBtnReg.push_back(icon);
+	_dynamicButtonsDirty = true;
+}
+
+void ToolBar::commitDynamicButtons()
+{
+	if (!_hSelf || !_dynamicButtonsDirty)
+		return;
+	std::stable_sort(_vDynBtnReg.begin(), _vDynBtnReg.end(), [](const DynamicCmdIcoBmp& a, const DynamicCmdIcoBmp& b) {
+		return a._startupOrder < b._startupOrder;
+	});
+	std::vector<TBBUTTON> oldButtons(_nbCurrentButtons);
+	for (size_t i = 0; i < oldButtons.size(); ++i)
+		::SendMessage(_hSelf, TB_GETBUTTON, i, reinterpret_cast<LPARAM>(&oldButtons[i]));
+	const size_t total = _nbButtons + (_vDynBtnReg.empty() ? 0 : _vDynBtnReg.size() + 1);
+	std::vector<TBBUTTON> buttons(total);
+	std::copy(oldButtons.begin(), oldButtons.begin() + _nbButtons, buttons.begin());
+	const bool redraw = (::GetWindowLongPtr(_hSelf, GWL_STYLE) & WS_VISIBLE) != 0;
+	if (redraw) ::SendMessage(_hSelf, WM_SETREDRAW, FALSE, 0);
+	_toolBarIcons.setDynamicIcons(_vDynBtnReg);
+	int builtinIcons = 0;
+	for (size_t i = 0; i < _nbButtons; ++i)
+		if (buttons[i].idCommand) ++builtinIcons;
+	if (!_vDynBtnReg.empty())
+	{
+		TBBUTTON separator = {};
+		separator.fsStyle = BTNS_SEP;
+		separator.fsState = TBSTATE_ENABLED;
+		buttons[_nbButtons] = separator;
+		if (!_nbDynButtons)
+			::SendMessage(_hSelf, TB_INSERTBUTTON, _nbButtons, reinterpret_cast<LPARAM>(&separator));
+	}
+	for (size_t i = 0; i < _vDynBtnReg.size(); ++i)
+	{
+		const auto& icon = _vDynBtnReg[i];
+		TBBUTTON button = {};
+		button.idCommand = icon._message;
+		button.fsState = TBSTATE_ENABLED;
+		button.fsStyle = BTNS_BUTTON;
+		bool found = false;
+		for (const auto& old : oldButtons)
+			if (old.idCommand == button.idCommand)
+			{
+				button = old;
+				found = true;
+				break;
+			}
+		if (_state != TB_STANDARD)
+			button.iBitmap = builtinIcons + static_cast<int>(i);
+		else if (!found)
+		{
+			TBADDBITMAP bitmap = {nullptr, reinterpret_cast<UINT_PTR>(icon._hBmp)};
+			button.iBitmap = static_cast<int>(::SendMessage(_hSelf, TB_ADDBITMAP, 1, reinterpret_cast<LPARAM>(&bitmap)));
+		}
+		const size_t position = _nbButtons + 1 + i;
+		buttons[position] = button;
+		if (!found)
+			::SendMessage(_hSelf, TB_INSERTBUTTON, position, reinterpret_cast<LPARAM>(&button));
+		else if (_state != TB_STANDARD)
+			::SendMessage(_hSelf, TB_CHANGEBITMAP, button.idCommand, button.iBitmap);
+	}
+	delete[] _pTBB;
+	_pTBB = new TBBUTTON[total];
+	std::copy(buttons.begin(), buttons.end(), _pTBB);
+	_nbDynButtons = _vDynBtnReg.size();
+	_nbTotalButtons = _nbCurrentButtons = total;
+	::SendMessage(_hSelf, TB_AUTOSIZE, 0, 0);
+	if (_pRebar)
+	{
+		_rbBand.cxIdeal = getWidth();
+		_pRebar->reNew(REBAR_BAR_TOOLBAR, &_rbBand);
+	}
+	_dynamicButtonsDirty = false;
+	if (redraw)
+	{
+		::SendMessage(_hSelf, WM_SETREDRAW, TRUE, 0);
+		::InvalidateRect(_hSelf, nullptr, FALSE);
 	}
 }
 

@@ -20,6 +20,7 @@
 #include "Notepad_plus_Window.h"
 #include "NppDarkMode.h"
 #include "StartupNoActivate.h"
+#include <algorithm>
 
 const TCHAR Notepad_plus_Window::_className[32] = TEXT("Notepad++");
 HWND Notepad_plus_Window::gNppHWND = NULL;
@@ -32,6 +33,7 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 {
 	startupTrace("window.init.begin");
 	StartupNoActivate noActivate(cmdLineParams->_noActivate);
+	_startupNoActivate = cmdLineParams->_noActivate;
 	time_t timestampBegin = 0;
 	if (cmdLineParams->_showLoadingTime)
 		timestampBegin = time(NULL);
@@ -250,6 +252,14 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 	scnN.nmhdr.idFrom = 0;
 	_notepad_plus_plus_core._pluginsManager.notify(&scnN);
 	startupTrace("plugins.ready");
+	if (_notepad_plus_plus_core._pluginsManager.hasDelayedPlugins())
+	{
+		// With a window, WM_TIMER carries nIDEvent, not SetTimer's return value.
+		_delayedPluginTimer = reinterpret_cast<UINT_PTR>(this);
+		if (!::SetTimer(_hSelf, _delayedPluginTimer, 25, nullptr))
+			_delayedPluginTimer = 0;
+		startupTrace(_delayedPluginTimer ? "plugins.timer.armed" : "plugins.timer.failed");
+	}
 
 	if (!cmdLineParams->_easterEggName.empty())
 	{
@@ -348,4 +358,73 @@ bool Notepad_plus_Window::isDlgsMsg(MSG *msg) const
 			return true;
 	}
 	return false;
+}
+
+void Notepad_plus_Window::loadOneDelayedPlugin()
+{
+	static bool firstTick = true;
+	if (firstTick)
+	{
+		startupTrace(_startupEditorPainted ? "plugins.idle.painted" : "plugins.idle.wait_paint");
+		firstTick = false;
+	}
+	auto& core = _notepad_plus_plus_core;
+	auto& manager = core._pluginsManager;
+	if (!manager.hasDelayedPlugins())
+	{
+		::KillTimer(_hSelf, _delayedPluginTimer);
+		_delayedPluginTimer = 0;
+		return;
+	}
+	if (_delayedLoadInProgress || !_startupEditorPainted || !::IsWindowVisible(_hSelf) ||
+		HIWORD(::GetQueueStatus(QS_INPUT | QS_PAINT)))
+		return;
+	LASTINPUTINFO input = {sizeof(input)};
+	if (::GetLastInputInfo(&input) && ::GetTickCount() - input.dwTime < 100)
+		return;
+
+	_delayedLoadInProgress = true;
+	struct ResetBusy { bool& busy; ~ResetBusy() { busy = false; } } resetBusy{_delayedLoadInProgress};
+	StartupNoActivate noActivate(_startupNoActivate);
+	auto& params = NppParameters::getInstance();
+	const auto priorShortcuts = params.getPluginCommandList();
+	const int index = manager.loadNextDelayedPlugin();
+	if (index < 0)
+		return;
+	params.reloadPluginCmds();
+	// Preserve any shortcut edited while this plugin was waiting for idle.
+	auto& shortcuts = params.getPluginCommandList();
+	for (size_t i = 0; i < priorShortcuts.size(); ++i)
+		shortcuts[i] = priorShortcuts[i];
+	manager.restoreShortcutOrder();
+	core._accelerator.updateShortcuts();
+	params.reloadContextMenuFromXmlTree(core._mainMenuHandle, manager.getMenuHandle());
+
+	SCNotification notification = {};
+	notification.nmhdr.hwndFrom = _hSelf;
+	notification.nmhdr.code = NPPN_TBMODIFICATION;
+	manager.notify(index, &notification);
+	std::vector<BufferID> buffers;
+	for (auto* tabs : {&core._mainDocTab, &core._subDocTab})
+		for (size_t i = 0; i < tabs->nbItem(); ++i)
+		{
+			const BufferID buffer = tabs->getBufferByIndex(i);
+			if (std::find(buffers.begin(), buffers.end(), buffer) == buffers.end() && !buffer->isUntitled())
+				buffers.push_back(buffer);
+		}
+	for (const auto buffer : buffers)
+	{
+		notification.nmhdr.code = NPPN_FILEOPENED;
+		notification.nmhdr.idFrom = reinterpret_cast<uptr_t>(buffer);
+		manager.notify(index, &notification);
+	}
+	notification.nmhdr.code = NPPN_READY;
+	notification.nmhdr.idFrom = 0;
+	manager.notify(index, &notification);
+	notification.nmhdr.code = NPPN_BUFFERACTIVATED;
+	notification.nmhdr.idFrom = reinterpret_cast<uptr_t>(core._pEditView->getCurrentBufferID());
+	manager.notify(index, &notification);
+	core._toolBar.commitDynamicButtons();
+	::DrawMenuBar(_hSelf);
+	startupTrace("plugin.delayed.ready");
 }

@@ -994,6 +994,8 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 
 		case SCN_PAINTED:
 		{
+			if (notifyView && ::IsWindowVisible(_pPublicInterface->getHSelf()))
+				_pPublicInterface->onEditorPainted();
 			static bool firstPaint = true;
 			if (firstPaint && notifyView)
 			{
