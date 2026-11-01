@@ -251,8 +251,13 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		bool transitionDisabled = setAttribute && SUCCEEDED(setAttribute(_hSelf,
 			DWMWA_TRANSITIONS_FORCEDISABLED, &disableTransition, sizeof(disableTransition)));
 		if (cmdLineParams->_noActivate)
+		{
+			// Unlike ShowWindow, a show-only SetWindowPos need not send WM_SIZE.
+			// Finish child layout while hidden before submitting the first frame.
+			::SendMessage(_hSelf, WM_SIZE, SIZE_RESTORED, 0);
 			::SetWindowPos(_hSelf, HWND_BOTTOM, 0, 0, 0, 0,
 				SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+		}
 		else if (cmdLineParams->isPointValid())
 			::ShowWindow(_hSelf, SW_SHOW);
 		else
