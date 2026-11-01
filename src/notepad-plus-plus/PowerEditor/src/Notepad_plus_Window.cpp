@@ -17,6 +17,7 @@
 
 #include <time.h>
 #include <shlwapi.h>
+#include <dwmapi.h>
 #include "Notepad_plus_Window.h"
 #include "NppDarkMode.h"
 #include "StartupNoActivate.h"
@@ -231,6 +232,15 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 	}
 	else if (!cmdLineParams->_isPreLaunch)
 	{
+		// Avoid exposing an animated, only partly composed startup surface.
+		// Resolve optionally so systems without DWM keep the original path.
+		HMODULE dwm = ::LoadLibraryExW(L"dwmapi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+		using SetAttribute = HRESULT(WINAPI*)(HWND, DWORD, LPCVOID, DWORD);
+		using FlushComposition = HRESULT(WINAPI*)();
+		auto setAttribute = dwm ? reinterpret_cast<SetAttribute>(::GetProcAddress(dwm, "DwmSetWindowAttribute")) : nullptr;
+		BOOL disableTransition = TRUE;
+		bool transitionDisabled = setAttribute && SUCCEEDED(setAttribute(_hSelf,
+			DWMWA_TRANSITIONS_FORCEDISABLED, &disableTransition, sizeof(disableTransition)));
 		if (cmdLineParams->_noActivate)
 			::ShowWindow(_hSelf, SW_SHOWNA);
 		else if (cmdLineParams->isPointValid())
@@ -241,6 +251,18 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		// the UI thread. Otherwise DWM can expose their unpainted white surfaces.
 		::RedrawWindow(_hSelf, nullptr, nullptr,
 			RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+		if (transitionDisabled)
+		{
+			auto flush = reinterpret_cast<FlushComposition>(::GetProcAddress(dwm, "DwmFlush"));
+			if (flush)
+				flush();
+			// Later minimize, restore and maximize animations retain their default.
+			disableTransition = FALSE;
+			setAttribute(_hSelf, DWMWA_TRANSITIONS_FORCEDISABLED, &disableTransition, sizeof(disableTransition));
+		}
+		if (dwm)
+			::FreeLibrary(dwm);
+		startupTrace("window.present.committed");
 	}
 	else
 	{
