@@ -1262,10 +1262,13 @@ LangType FileManager::detectLanguageFromTextBegining(const unsigned char *data, 
 
 bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data, Utf8_16_Read * unicodeConvertor, LoadedFileFormat& fileFormat)
 {
-	StartupTraceScope trace(L"file.read.decode");
+	startupTrace("begin", L"file.read.decode");
 	FILE *fp = generic_fopen(filename, TEXT("rb"));
 	if (!fp)
+	{
+		startupTrace("end", L"file.read.decode");
 		return false;
+	}
 
 	//Get file size
 	_fseeki64 (fp , 0 , SEEK_END);
@@ -1284,6 +1287,7 @@ bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data,
 										MB_OK|MB_APPLMODAL);
 
 		fclose(fp);
+		startupTrace("end", L"file.read.decode");
 		return false;
 	}
 
@@ -1440,6 +1444,7 @@ bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data,
 
 	_pscratchTilla->execute(SCI_SETDOCPOINTER, 0, _scratchDocDefault);
 
+	startupTrace("end", L"file.read.decode");
 	return success;
 }
 
