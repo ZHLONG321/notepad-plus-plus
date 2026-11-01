@@ -2250,14 +2250,18 @@ bool ScintillaWin::ModifyScrollBars(Sci::Line nMax, Sci::Line nPage) {
 	const Sci::Line vertEndPreferred = nMax;
 	if (!verticalScrollBarVisible)
 		nPage = vertEndPreferred + 1;
+	// Windows clamps a page to the scroll range. Compare the value it retains,
+	// otherwise an oversized page makes every layout submit the same update.
+	const UINT verticalPage = std::min(static_cast<UINT>(nPage),
+		static_cast<UINT>(vertEndPreferred) + 1);
 	if ((sci.nMin != 0) ||
 		(sci.nMax != vertEndPreferred) ||
-	        (sci.nPage != static_cast<unsigned int>(nPage)) ||
+	        (sci.nPage != verticalPage) ||
 	        (sci.nPos != 0)) {
 		sci.fMask = SIF_PAGE | SIF_RANGE;
 		sci.nMin = 0;
 		sci.nMax = static_cast<int>(vertEndPreferred);
-		sci.nPage = static_cast<UINT>(nPage);
+		sci.nPage = verticalPage;
 		sci.nPos = 0;
 		sci.nTrackPos = 1;
 		SetScrollInfo(SB_VERT, &sci, TRUE);
@@ -2271,16 +2275,18 @@ bool ScintillaWin::ModifyScrollBars(Sci::Line nMax, Sci::Line nPage) {
 	int pageWidth = static_cast<int>(rcText.Width());
 	if (!horizontalScrollBarVisible || Wrapping())
 		pageWidth = horizEndPreferred + 1;
+	const UINT horizontalPage = std::min(static_cast<UINT>(pageWidth),
+		static_cast<UINT>(horizEndPreferred) + 1);
 	sci.fMask = SIF_PAGE | SIF_RANGE;
 	GetScrollInfo(SB_HORZ, &sci);
 	if ((sci.nMin != 0) ||
 		(sci.nMax != horizEndPreferred) ||
-		(sci.nPage != static_cast<unsigned int>(pageWidth)) ||
+		(sci.nPage != horizontalPage) ||
 	        (sci.nPos != 0)) {
 		sci.fMask = SIF_PAGE | SIF_RANGE;
 		sci.nMin = 0;
 		sci.nMax = horizEndPreferred;
-		sci.nPage = pageWidth;
+		sci.nPage = horizontalPage;
 		sci.nPos = 0;
 		sci.nTrackPos = 1;
 		SetScrollInfo(SB_HORZ, &sci, TRUE);
