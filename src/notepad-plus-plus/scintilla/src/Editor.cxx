@@ -61,6 +61,7 @@
 #include "../../PowerEditor/src/StartupTrace.h"
 #undef min
 #undef max
+#undef FindText
 #endif
 
 using namespace Scintilla;
