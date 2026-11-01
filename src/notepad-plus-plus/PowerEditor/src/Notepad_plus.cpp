@@ -6709,6 +6709,7 @@ void Notepad_plus::launchAnsiCharPanel()
 
 void Notepad_plus::launchFileBrowser(const vector<generic_string> & folders, const generic_string& selectedItemPath, bool fromScratch)
 {
+	StartupTraceScope trace(L"fileBrowser.launch");
 	if (!_pFileBrowser)
 	{
 		_pFileBrowser = new FileBrowser;
@@ -6716,7 +6717,10 @@ void Notepad_plus::launchFileBrowser(const vector<generic_string> & folders, con
 
 		tTbData	data;
 		memset(&data, 0, sizeof(data));
-		_pFileBrowser->create(&data, _nativeLangSpeaker.isRTL());
+		{
+			StartupTraceScope createTrace(L"fileBrowser.create");
+			_pFileBrowser->create(&data, _nativeLangSpeaker.isRTL());
+		}
 		data.pszName = TEXT("ST");
 
 		NppParameters& nppParams = NppParameters::getInstance();
@@ -6748,7 +6752,10 @@ void Notepad_plus::launchFileBrowser(const vector<generic_string> & folders, con
 			wcscpy_s(title, title_temp.c_str());
 			data.pszName = title;
 		}
-		::SendMessage(_pPublicInterface->getHSelf(), NPPM_DMMREGASDCKDLG, 0, reinterpret_cast<LPARAM>(&data));
+		{
+			StartupTraceScope registerTrace(L"fileBrowser.registerDocking");
+			::SendMessage(_pPublicInterface->getHSelf(), NPPM_DMMREGASDCKDLG, 0, reinterpret_cast<LPARAM>(&data));
+		}
 
 		COLORREF fgColor = nppParams.getCurrentDefaultFgColor();
 		COLORREF bgColor = nppParams.getCurrentDefaultBgColor();
@@ -6767,8 +6774,11 @@ void Notepad_plus::launchFileBrowser(const vector<generic_string> & folders, con
 		_pFileBrowser->addRootFolder(folders[i]);
 	}
 
-	_pFileBrowser->display();
-	_pFileBrowser->selectItemFromPath(selectedItemPath);
+	{
+		StartupTraceScope displayTrace(L"fileBrowser.display");
+		_pFileBrowser->display();
+		_pFileBrowser->selectItemFromPath(selectedItemPath);
+	}
 
 	checkMenuItem(IDM_VIEW_FILEBROWSER, true);
 	_toolBar.setCheck(IDM_VIEW_FILEBROWSER, true);

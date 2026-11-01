@@ -23,6 +23,7 @@
 #include "RunDlg.h"
 #include "ReadDirectoryChanges.h"
 #include "menuCmdID.h"
+#include "StartupTrace.h"
 
 #define CX_BITMAP         16
 #define CY_BITMAP         16
@@ -101,6 +102,7 @@ INT_PTR CALLBACK FileBrowser::run_dlgProc(UINT message, WPARAM wParam, LPARAM lP
 	{
 		case WM_INITDIALOG :
 		{
+			StartupTraceScope initTrace(L"fileBrowser.init");
 			NppParameters& nppParam = NppParameters::getInstance();
 			int style = WS_CHILD | WS_VISIBLE | CCS_ADJUSTABLE | TBSTYLE_AUTOSIZE | TBSTYLE_FLAT | TBSTYLE_LIST | TBSTYLE_TRANSPARENT | BTNS_AUTOSIZE | BTNS_SEP | TBSTYLE_TOOLTIPS | TBSTYLE_CUSTOMERASE;
 			_hToolbarMenu = CreateWindowEx(WS_EX_LAYOUTRTL, TOOLBARCLASSNAME, NULL, style, 0, 0, 0, 0, _hSelf, nullptr, _hInst, NULL);
@@ -156,10 +158,16 @@ INT_PTR CALLBACK FileBrowser::run_dlgProc(UINT message, WPARAM wParam, LPARAM lP
 			::SendMessage(_hToolbarMenu, TB_GETIMAGELIST, 0, 0);
 			ShowWindow(_hToolbarMenu, SW_SHOW);
 
-			FileBrowser::initPopupMenus();
+			{
+				StartupTraceScope menusTrace(L"fileBrowser.popupMenus");
+				FileBrowser::initPopupMenus();
+			}
 
-			_treeView.init(_hInst, _hSelf, ID_FILEBROWSERTREEVIEW);
-			setImageList(IDI_FB_ROOTOPEN, IDI_FB_ROOTCLOSE, IDI_PROJECT_FOLDEROPEN, IDI_PROJECT_FOLDERCLOSE, IDI_PROJECT_FILE);
+			{
+				StartupTraceScope treeTrace(L"fileBrowser.tree");
+				_treeView.init(_hInst, _hSelf, ID_FILEBROWSERTREEVIEW);
+				setImageList(IDI_FB_ROOTOPEN, IDI_FB_ROOTCLOSE, IDI_PROJECT_FOLDEROPEN, IDI_PROJECT_FOLDERCLOSE, IDI_PROJECT_FILE);
+			}
 
 			_treeView.addCanNotDropInList(INDEX_OPEN_ROOT);
 			_treeView.addCanNotDropInList(INDEX_CLOSE_ROOT);
