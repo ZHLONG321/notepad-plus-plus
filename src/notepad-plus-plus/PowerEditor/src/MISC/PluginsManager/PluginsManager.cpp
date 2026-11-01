@@ -660,24 +660,7 @@ void PluginsManager::notify(size_t indexPluginInfo, const SCNotification *notifi
 			if (traceLifecycle) startupTrace("notification.begin", _pluginInfos[indexPluginInfo]->_moduleName.c_str());
 			const bool traceActivation = scNotif.nmhdr.code == NPPN_BUFFERACTIVATED;
 			if (traceActivation) startupTrace("activation.plugin.begin", _pluginInfos[indexPluginInfo]->_moduleName.c_str());
-			const bool traceEditor = startupTraceHandle() != INVALID_HANDLE_VALUE &&
-				(notification->nmhdr.code == SCN_MODIFIED || notification->nmhdr.code == SCN_STYLENEEDED);
-			LARGE_INTEGER callbackStart{}, callbackEnd{}, callbackFrequency{};
-			if (traceEditor) QueryPerformanceCounter(&callbackStart);
 			_pluginInfos[indexPluginInfo]->_pBeNotified(&scNotif);
-			if (traceEditor)
-			{
-				QueryPerformanceCounter(&callbackEnd);
-				QueryPerformanceFrequency(&callbackFrequency);
-				const double milliseconds = 1000.0 * (callbackEnd.QuadPart - callbackStart.QuadPart) / callbackFrequency.QuadPart;
-				if (milliseconds >= 0.5)
-				{
-					wchar_t detail[512]{};
-					swprintf_s(detail, L"%s code=%u modification=%d ms=%.4f", _pluginInfos[indexPluginInfo]->_moduleName.c_str(),
-						notification->nmhdr.code, notification->modificationType, milliseconds);
-					startupTrace("editor.plugin.slow", detail);
-				}
-			}
 			if (traceActivation) startupTrace("activation.plugin.end", _pluginInfos[indexPluginInfo]->_moduleName.c_str());
 			if (notification->nmhdr.code == NPPN_FILEOPENED)
 				startupTrace("fileopened.delivered", _pluginInfos[indexPluginInfo]->_moduleName.c_str());
