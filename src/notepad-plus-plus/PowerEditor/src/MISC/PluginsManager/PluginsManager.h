@@ -96,7 +96,9 @@ public:
 	int loadNextDelayedPlugin();
 	size_t getCommandStartupOrder(int commandID) const;
 	void restoreShortcutOrder();
-	void runDelayedStartupCommands(size_t index);
+	void queueStartupCommand(const TCHAR *pluginName, int commandID);
+	void runStartupCommands();
+	void runStartupCommands(size_t index);
 
     bool unloadPlugin(int index, HWND nppHandle);
 

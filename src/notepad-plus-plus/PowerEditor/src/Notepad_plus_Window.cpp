@@ -288,6 +288,7 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 	scnN.nmhdr.hwndFrom = _hSelf;
 	scnN.nmhdr.idFrom = 0;
 	_notepad_plus_plus_core._pluginsManager.notify(&scnN);
+	_notepad_plus_plus_core._pluginsManager.runStartupCommands();
 	startupTrace("plugins.ready");
 	if (_notepad_plus_plus_core._pluginsManager.hasDelayedPlugins())
 	{
@@ -451,7 +452,6 @@ void Notepad_plus_Window::loadOneDelayedPlugin()
 	notification.nmhdr.hwndFrom = _hSelf;
 	notification.nmhdr.code = NPPN_TBMODIFICATION;
 	manager.notify(index, &notification);
-	manager.runDelayedStartupCommands(index);
 	std::vector<BufferID> buffers;
 	for (auto* tabs : {&core._mainDocTab, &core._subDocTab})
 		for (size_t i = 0; i < tabs->nbItem(); ++i)
@@ -492,6 +492,7 @@ void Notepad_plus_Window::loadOneDelayedPlugin()
 	notification.nmhdr.code = NPPN_BUFFERACTIVATED;
 	notification.nmhdr.idFrom = reinterpret_cast<uptr_t>(core._pEditView->getCurrentBufferID());
 	manager.notify(index, &notification);
+	manager.runStartupCommands(index);
 	core._toolBar.commitDynamicButtons();
 	::DrawMenuBar(_hSelf);
 	startupTrace("plugin.delayed.ready");

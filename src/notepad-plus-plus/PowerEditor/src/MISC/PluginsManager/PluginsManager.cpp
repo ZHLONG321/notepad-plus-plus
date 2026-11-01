@@ -614,21 +614,17 @@ void PluginsManager::runPluginCommand(size_t i)
 }
 
 
+void PluginsManager::queueStartupCommand(const TCHAR *pluginName, int commandID)
+{
+	// Both loading modes must let the plugin finish its READY handler first.
+	const auto request = std::make_pair(generic_string(pluginName), commandID);
+	if (std::find(_delayedStartupCommands.begin(), _delayedStartupCommands.end(), request) == _delayedStartupCommands.end())
+		_delayedStartupCommands.push_back(request);
+	startupTrace("plugin.savedCommand.queued", pluginName);
+}
+
 void PluginsManager::runPluginCommand(const TCHAR *pluginName, int commandID)
 {
-	// A saved visible panel may request its command before its DLL is loaded.
-	// Retain the request instead of forcing the plugin into the first frame.
-	for (const auto& path : _delayedPlugins)
-	{
-		if (!generic_stricmp(::PathFindFileName(path.c_str()), pluginName))
-		{
-			const auto request = std::make_pair(generic_string(pluginName), commandID);
-			if (std::find(_delayedStartupCommands.begin(), _delayedStartupCommands.end(), request) == _delayedStartupCommands.end())
-				_delayedStartupCommands.push_back(request);
-			startupTrace("plugin.savedCommand.queued", pluginName);
-			return;
-		}
-	}
 	for (size_t i = 0, len = _pluginsCommands.size() ; i < len ; ++i)
 	{
 		if (!generic_stricmp(_pluginsCommands[i]._pluginName.c_str(), pluginName))
@@ -655,7 +651,13 @@ void PluginsManager::runPluginCommand(const TCHAR *pluginName, int commandID)
 	}
 }
 
-void PluginsManager::runDelayedStartupCommands(size_t index)
+void PluginsManager::runStartupCommands()
+{
+	for (size_t index = 0, count = _pluginInfos.size(); index < count; ++index)
+		runStartupCommands(index);
+}
+
+void PluginsManager::runStartupCommands(size_t index)
 {
 	if (index >= _pluginInfos.size() || _noMoreNotification)
 		return;

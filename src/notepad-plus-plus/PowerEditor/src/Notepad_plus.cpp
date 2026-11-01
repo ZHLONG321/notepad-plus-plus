@@ -729,7 +729,7 @@ LRESULT Notepad_plus::init(HWND hwnd)
 				if (pdi._name == NPP_INTERNAL_FUCTION_STR)
 					_internalFuncIDs.push_back(pdi._internalID);
 				else
-					_pluginsManager.runPluginCommand(pdi._name.c_str(), pdi._internalID);
+					_pluginsManager.queueStartupCommand(pdi._name.c_str(), pdi._internalID);
 			}
 		}
 
