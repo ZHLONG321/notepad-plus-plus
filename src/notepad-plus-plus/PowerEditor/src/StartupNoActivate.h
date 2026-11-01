@@ -24,6 +24,12 @@ private:
 	HHOOK _hook = nullptr;
 	static LRESULT CALLBACK hookProc(int code, WPARAM wParam, LPARAM lParam)
 	{
+		if (code == HCBT_CREATEWND)
+		{
+			auto creation = reinterpret_cast<CBT_CREATEWND*>(lParam);
+			if (!(creation->lpcs->style & WS_CHILD))
+				creation->hwndInsertAfter = HWND_BOTTOM;
+		}
 		if (code == HCBT_ACTIVATE || code == HCBT_SETFOCUS)
 		{
 			DWORD process = 0;

@@ -251,7 +251,8 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		bool transitionDisabled = setAttribute && SUCCEEDED(setAttribute(_hSelf,
 			DWMWA_TRANSITIONS_FORCEDISABLED, &disableTransition, sizeof(disableTransition)));
 		if (cmdLineParams->_noActivate)
-			::ShowWindow(_hSelf, SW_SHOWNA);
+			::SetWindowPos(_hSelf, HWND_BOTTOM, 0, 0, 0, 0,
+				SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
 		else if (cmdLineParams->isPointValid())
 			::ShowWindow(_hSelf, SW_SHOW);
 		else
