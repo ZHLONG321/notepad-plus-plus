@@ -194,11 +194,21 @@ void TabBar::setImageList(HIMAGELIST himl)
 }
 
 
+int TabBar::getTabBarThickness() const
+{
+	RECT rowRect = {};
+	const int rowCount = TabCtrl_GetRowCount(_hSelf);
+	const int edge = GetSystemMetrics(_isVertical ? SM_CXEDGE : SM_CYEDGE);
+	if (!TabCtrl_GetItemRect(_hSelf, 0, &rowRect))
+		return edge;
+	const int itemSize = _isVertical ? rowRect.right - rowRect.left : rowRect.bottom - rowRect.top;
+	const int extra = rowCount >= 2 ? (rowCount - 2) * 3 : 0;
+	return rowCount * itemSize + extra + edge;
+}
+
+
 void TabBar::reSizeTo(RECT & rc2Ajust)
 {
-	RECT rowRect;
-	int rowCount, tabsHight;
-
 	// Important to do that!
 	// Otherwise, the window(s) it contains will take all the resouce of CPU
 	// We don't need to resize the contained windows if they are even invisible anyway
@@ -209,14 +219,9 @@ void TabBar::reSizeTo(RECT & rc2Ajust)
 	// Do our own calculations because TabCtrl_AdjustRect doesn't work
 	// on vertical or multi-lined tab controls
 
-	rowCount = TabCtrl_GetRowCount(_hSelf);
-	TabCtrl_GetItemRect(_hSelf, 0, &rowRect);
-
-	int larger = _isVertical ? rowRect.right : rowRect.bottom;
-	int smaller = _isVertical ? rowRect.left : rowRect.top;
-	int marge = 0;
-
-	LONG_PTR style = ::GetWindowLongPtr(_hSelf, GWL_STYLE);
+	const int rowCount = TabCtrl_GetRowCount(_hSelf);
+	const LONG_PTR oldStyle = ::GetWindowLongPtr(_hSelf, GWL_STYLE);
+	LONG_PTR style = oldStyle;
 	if (rowCount == 1)
 	{
 		style &= ~TCS_BUTTONS;
@@ -224,22 +229,21 @@ void TabBar::reSizeTo(RECT & rc2Ajust)
 	else // (rowCount >= 2)
 	{
 		style |= TCS_BUTTONS;
-		marge = (rowCount - 2) * 3; // in TCS_BUTTONS mode, each row has few pixels higher
 	}
 
-	::SetWindowLongPtr(_hSelf, GWL_STYLE, style);
-	tabsHight = rowCount * (larger - smaller) + marge;
-	tabsHight += GetSystemMetrics(_isVertical ? SM_CXEDGE : SM_CYEDGE);
+	if (style != oldStyle)
+		::SetWindowLongPtr(_hSelf, GWL_STYLE, style);
+	_tabBarThickness = getTabBarThickness();
 
 	if (_isVertical)
 	{
-		rc2Ajust.left += tabsHight;
-		rc2Ajust.right -= tabsHight;
+		rc2Ajust.left += _tabBarThickness;
+		rc2Ajust.right -= _tabBarThickness;
 	}
 	else
 	{
-		rc2Ajust.top += tabsHight;
-		rc2Ajust.bottom -= tabsHight;
+		rc2Ajust.top += _tabBarThickness;
+		rc2Ajust.bottom -= _tabBarThickness;
 	}
 }
 

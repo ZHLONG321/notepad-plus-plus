@@ -99,6 +99,8 @@ public:
 
 
 protected:
+	int getTabBarThickness() const;
+	int _tabBarThickness = -1;
 	size_t _nbItem = 0;
 	bool _hasImgLst = false;
 	HFONT _hFont = nullptr;

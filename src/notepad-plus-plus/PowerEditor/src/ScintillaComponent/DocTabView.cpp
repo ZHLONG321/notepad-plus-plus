@@ -63,8 +63,9 @@ bool DocTabView::activateBuffer(BufferID buffer)
 		return false;	//cannot activate
 
 	activateAt(indexToActivate);
-	// Selection only changes the space needed by multi-row/vertical tabs.
-	if (_isMultiLine || _isVertical)
+	// Native tabs arrange their own rows on selection. The host only needs to
+	// resize the editor when the strip actually consumes a different extent.
+	if (!_hideTabBarStatus && getTabBarThickness() != _tabBarThickness)
 		::SendMessage(_hParent, WM_SIZE, 0, 0);
 	return true;
 }
