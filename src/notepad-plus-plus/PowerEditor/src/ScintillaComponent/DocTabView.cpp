@@ -43,7 +43,7 @@ void DocTabView::addBuffer(BufferID buffer)
 	tie.pszText = const_cast<TCHAR *>(buf->getFileName());
 	tie.lParam = reinterpret_cast<LPARAM>(buffer);
 	::SendMessage(_hSelf, TCM_INSERTITEM, _nbItem++, reinterpret_cast<LPARAM>(&tie));
-	// BufferChangeMask includes BufferChangeRecentTag, which requests layout.
+	// The filename update lays out the newly inserted tab once.
 	bufferUpdated(buf, BufferChangeMask);
 }
 
@@ -63,6 +63,9 @@ bool DocTabView::activateBuffer(BufferID buffer)
 		return false;	//cannot activate
 
 	activateAt(indexToActivate);
+	// Selection only changes the space needed by multi-row/vertical tabs.
+	if (_isMultiLine || _isVertical)
+		::SendMessage(_hParent, WM_SIZE, 0, 0);
 	return true;
 }
 
@@ -121,21 +124,13 @@ BufferID DocTabView::getBufferByIndex(size_t index)
 
 void DocTabView::bufferUpdated(Buffer * buffer, int mask)
 {
-	// Recent-use ordering does not change a single-row tab's size or contents.
-	// Multi-row/vertical controls still need layout when selection changes rows.
-	const bool updateItem = (mask & (BufferChangeReadonly | BufferChangeDirty | BufferChangeFilename)) != 0;
-	const bool updateLayout = (mask & BufferChangeRecentTag) &&
-		(_isMultiLine || _isVertical || (mask & BufferChangeFilename));
-	if (!updateItem && !updateLayout)
+	// Document metadata and tab geometry have separate update paths. Recent-use
+	// ordering belongs to document selection, not to the native tab item.
+	if (!(mask & (BufferChangeReadonly | BufferChangeDirty | BufferChangeFilename)))
 		return;
 	int index = getIndexByBuffer(buffer->getID());
 	if (index == -1)
 		return;
-	if (!updateItem)
-	{
-		::SendMessage(_hParent, WM_SIZE, 0, 0);
-		return;
-	}
 
 	TCITEM tie;
 	tie.lParam = -1;
@@ -187,8 +182,8 @@ void DocTabView::bufferUpdated(Buffer * buffer, int mask)
 
 	::SendMessage(_hSelf, TCM_SETITEM, index, reinterpret_cast<LPARAM>(&tie));
 
-	// Insertion/replacement updates the full item; selection can change row height.
-	if (updateLayout)
+	// A changed label can alter row count, including insertion and replacement.
+	if (mask & BufferChangeFilename)
 		::SendMessage(_hParent, WM_SIZE, 0, 0);
 }
 
@@ -203,7 +198,7 @@ void DocTabView::setBuffer(size_t index, BufferID id)
 	tie.mask = TCIF_PARAM;
 	::SendMessage(_hSelf, TCM_SETITEM, index, reinterpret_cast<LPARAM>(&tie));
 
-	// The complete update also requests the parent layout once.
+	// The filename update also requests the parent layout once.
 	bufferUpdated(MainFileManager.getBufferByID(id), BufferChangeMask);
 }
 
