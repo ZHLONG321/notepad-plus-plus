@@ -191,7 +191,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 				RECT rc = { 0 };
 				GetClientRect(hwnd, &rc);
 				::FillRect(reinterpret_cast<HDC>(wParam), &rc, NppDarkMode::getDarkerBackgroundBrush());
-				return 0;
+				return TRUE;
 			}
 			else
 			{

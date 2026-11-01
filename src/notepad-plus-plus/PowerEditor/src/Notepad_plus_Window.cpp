@@ -48,7 +48,9 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 	nppClass.hInstance = _hInst;
 	nppClass.hIcon = ::LoadIcon(hInst, MAKEINTRESOURCE(IDI_M30ICON));
 	nppClass.hCursor = ::LoadCursor(NULL, IDC_ARROW);
-	nppClass.hbrBackground = NppDarkMode::isEnabled() ? NppDarkMode::getDarkerBackgroundBrush() : ::GetSysColorBrush(COLOR_MENU);
+	// Theme brushes can be recreated when custom colors change. Keep a stable
+	// class brush; WM_ERASEBKGND obtains the current dark brush when painting.
+	nppClass.hbrBackground = ::GetSysColorBrush(COLOR_MENU);
 	nppClass.lpszMenuName = MAKEINTRESOURCE(IDR_M30_MENU);
 	nppClass.lpszClassName = _className;
 
