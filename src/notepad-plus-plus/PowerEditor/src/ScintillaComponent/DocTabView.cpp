@@ -121,9 +121,21 @@ BufferID DocTabView::getBufferByIndex(size_t index)
 
 void DocTabView::bufferUpdated(Buffer * buffer, int mask)
 {
+	// Recent-use ordering does not change a single-row tab's size or contents.
+	// Multi-row/vertical controls still need layout when selection changes rows.
+	const bool updateItem = (mask & (BufferChangeReadonly | BufferChangeDirty | BufferChangeFilename)) != 0;
+	const bool updateLayout = (mask & BufferChangeRecentTag) &&
+		(_isMultiLine || _isVertical || (mask & BufferChangeFilename));
+	if (!updateItem && !updateLayout)
+		return;
 	int index = getIndexByBuffer(buffer->getID());
 	if (index == -1)
 		return;
+	if (!updateItem)
+	{
+		::SendMessage(_hParent, WM_SIZE, 0, 0);
+		return;
+	}
 
 	TCITEM tie;
 	tie.lParam = -1;
@@ -175,9 +187,8 @@ void DocTabView::bufferUpdated(Buffer * buffer, int mask)
 
 	::SendMessage(_hSelf, TCM_SETITEM, index, reinterpret_cast<LPARAM>(&tie));
 
-	// send WM_SIZE only when change tab
-	// It is needed while a tab is closed (so tab changed) in multi-line tab mode
-	if (mask & BufferChangeRecentTag)
+	// Insertion/replacement updates the full item; selection can change row height.
+	if (updateLayout)
 		::SendMessage(_hParent, WM_SIZE, 0, 0);
 }
 

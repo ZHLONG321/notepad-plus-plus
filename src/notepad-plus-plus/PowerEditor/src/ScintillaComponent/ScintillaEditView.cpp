@@ -22,6 +22,7 @@
 #include "Parameters.h"
 #include "Sorters.h"
 #include "verifySignedfile.h"
+#include "StartupTrace.h"
 
 using namespace std;
 
@@ -1394,6 +1395,7 @@ void ScintillaEditView::setWordChars()
 
 void ScintillaEditView::defineDocType(LangType typeDoc)
 {
+	StartupTraceScope trace(L"editor.defineDocType");
     StyleArray & stylers = NppParameters::getInstance().getMiscStylerArray();
     int iStyleDefault = stylers.getStylerIndexByID(STYLE_DEFAULT);
     if (iStyleDefault != -1)
@@ -1981,6 +1983,7 @@ void ScintillaEditView::styleChange()
 
 void ScintillaEditView::activateBuffer(BufferID buffer)
 {
+	StartupTraceScope trace(L"editor.activateBuffer");
 	if (buffer == BUFFER_INVALID)
 		return;
 	if (buffer == _currentBuffer)

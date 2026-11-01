@@ -4364,6 +4364,7 @@ void Notepad_plus::docGotoAnotherEditView(FileTransferMode mode)
 
 bool Notepad_plus::activateBuffer(BufferID id, int whichOne)
 {
+	StartupTraceScope trace(L"document.activateBuffer");
 	NppGUI& nppGui = NppParameters::getInstance().getNppGUI();
 	bool isSnapshotMode = nppGui.isSnapshotMode();
 	if (isSnapshotMode)
@@ -5999,6 +6000,7 @@ void Notepad_plus::notifyBufferChanged(Buffer * buffer, int mask)
 
 void Notepad_plus::notifyBufferActivated(BufferID bufid, int view)
 {
+	StartupTraceScope trace(L"document.notifyActivated");
 	Buffer * buf = MainFileManager.getBufferByID(bufid);
 	buf->increaseRecentTag();
 
