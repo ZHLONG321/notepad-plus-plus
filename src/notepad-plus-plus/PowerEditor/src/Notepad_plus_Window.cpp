@@ -33,6 +33,7 @@ HWND Notepad_plus_Window::gNppHWND = NULL;
 void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLine, CmdLineParams *cmdLineParams)
 {
 	startupTrace("window.init.begin");
+	StartupNoActivate::setBackgroundMode(cmdLineParams->_noActivate);
 	StartupNoActivate noActivate(cmdLineParams->_noActivate);
 	_startupNoActivate = cmdLineParams->_noActivate;
 	time_t timestampBegin = 0;

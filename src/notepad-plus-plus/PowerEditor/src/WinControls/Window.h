@@ -17,6 +17,7 @@
 
 #pragma once
 #include <windows.h>
+#include "StartupNoActivate.h"
 
 class Window
 {
@@ -109,7 +110,10 @@ public:
 	}
 
 	void getFocus() const {
-		::SetFocus(_hSelf);
+		// A background-only launch must not activate itself when a dialog
+		// returns focus to its editor. Normal and foreground use stay unchanged.
+		if (StartupNoActivate::permitsFocus())
+			::SetFocus(_hSelf);
 	}
 
     HINSTANCE getHinst() const

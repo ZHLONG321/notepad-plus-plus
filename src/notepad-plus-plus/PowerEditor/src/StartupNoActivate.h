@@ -11,6 +11,18 @@
 class StartupNoActivate final
 {
 public:
+	static void setBackgroundMode(bool enabled)
+	{
+		backgroundMode() = enabled;
+	}
+	static bool permitsFocus()
+	{
+		if (!backgroundMode())
+			return true;
+		DWORD process = 0;
+		::GetWindowThreadProcessId(::GetForegroundWindow(), &process);
+		return process == ::GetCurrentProcessId();
+	}
 	explicit StartupNoActivate(bool enabled)
 	{
 		if (enabled)
@@ -40,6 +52,11 @@ public:
 	StartupNoActivate& operator=(const StartupNoActivate&) = delete;
 
 private:
+	static bool& backgroundMode()
+	{
+		static bool value = false;
+		return value;
+	}
 	HHOOK _hook = nullptr;
 	HHOOK _creationHook = nullptr;
 	std::vector<HWND> _pendingCreation;
