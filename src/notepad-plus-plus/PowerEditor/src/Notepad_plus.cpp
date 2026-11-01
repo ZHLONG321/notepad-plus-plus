@@ -2314,10 +2314,14 @@ bool doCheck(HMENU mainHandle, int id)
 				::CheckMenuRadioItem(mainHandle, 0, count, i, MF_BYPOSITION);
 				found = true;
 			}
-			else
+			else if (mii.fState != 0)
 			{
-				mii.fState = 0;
-				::SetMenuItemInfo(mainHandle, i, MF_BYPOSITION, &mii);
+				// Keep the existing unchecked/enabled state without rewriting the
+				// complete menu item on every document activation.
+				MENUITEMINFO state = {};
+				state.cbSize = sizeof(state);
+				state.fMask = MIIM_STATE;
+				::SetMenuItemInfo(mainHandle, i, MF_BYPOSITION, &state);
 			}
 		}
 	}
@@ -6028,13 +6032,10 @@ void Notepad_plus::notifyBufferActivated(BufferID bufid, int view)
 
 	startupTrace("begin", L"activation.chrome");
 	checkDocState();
-	dynamicCheckMenuAndTB();
 	setLangStatus(buf->getLangType());
 	updateStatusBar();
-	checkUnicodeMenuItems(/*buf->getUnicodeMode()*/);
 	setUniModeText();
 	setDisplayFormat(buf->getEolFormat());
-	enableConvertMenuItems(buf->getEolFormat());
 	generic_string dir(buf->getFullPathName());
 	PathRemoveFileSpec(dir);
 	setWorkingDir(dir.c_str());

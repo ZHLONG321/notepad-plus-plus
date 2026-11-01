@@ -1992,6 +1992,7 @@ void ScintillaEditView::activateBuffer(BufferID buffer)
 
 	// before activating another document, we get the current position
 	// from the Scintilla view then save it to the current document
+	startupTrace("begin", L"editor.saveState");
 	saveCurrentPos();
 
 	// get foldStateInfo of current doc
@@ -2000,13 +2001,16 @@ void ScintillaEditView::activateBuffer(BufferID buffer)
 
 	// put the state into the future ex buffer
 	_currentBuffer->setHeaderLineState(lineStateVector, this);
+	startupTrace("end", L"editor.saveState");
 
 	_currentBufferID = buffer;	//the magical switch happens here
 	_currentBuffer = newBuf;
 	// change the doc, this operation will decrease
 	// the ref count of old current doc and increase the one of the new doc. FileManager should manage the rest
 	// Note that the actual reference in the Buffer itself is NOT decreased, Notepad_plus does that if neccessary
+	startupTrace("begin", L"editor.documentPointer");
 	execute(SCI_SETDOCPOINTER, 0, _currentBuffer->getDocument());
+	startupTrace("end", L"editor.documentPointer");
 
 	// Due to execute(SCI_CLEARDOCUMENTSTYLE); in defineDocType() function
 	// defineDocType() function should be called here, but not be after the fold info loop
@@ -2014,12 +2018,15 @@ void ScintillaEditView::activateBuffer(BufferID buffer)
 
 	setWordChars();
 
+	startupTrace("begin", L"editor.lexDocument");
 	if (_currentBuffer->getNeedsLexing())
 	{
 		restyleBuffer();
 	}
+	startupTrace("end", L"editor.lexDocument");
 
 	// Everything should be updated, but the language
+	startupTrace("begin", L"editor.restoreState");
 	bufferUpdated(_currentBuffer, (BufferChangeMask & ~BufferChangeLanguage));
 
 	// restore the collapsed info
@@ -2035,6 +2042,7 @@ void ScintillaEditView::activateBuffer(BufferID buffer)
 	itoa(numLines, numLineStr, 10);
 
 	runMarkers(true, 0, true, false);
+	startupTrace("end", L"editor.restoreState");
     return;	//all done
 }
 
