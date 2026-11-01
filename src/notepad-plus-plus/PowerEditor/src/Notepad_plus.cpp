@@ -6011,6 +6011,7 @@ void Notepad_plus::notifyBufferActivated(BufferID bufid, int view)
 	Buffer * buf = MainFileManager.getBufferByID(bufid);
 	buf->increaseRecentTag();
 
+	startupTrace("begin", L"activation.autocomplete");
 	if (view == MAIN_VIEW)
 	{
 		_autoCompleteMain.setLanguage(buf->getLangType());
@@ -6019,11 +6020,13 @@ void Notepad_plus::notifyBufferActivated(BufferID bufid, int view)
 	{
 		_autoCompleteSub.setLanguage(buf->getLangType());
 	}
+	startupTrace("end", L"activation.autocomplete");
 
 	if (view != currentView())
 		return;	//dont care if another view did something
 
 
+	startupTrace("begin", L"activation.chrome");
 	checkDocState();
 	dynamicCheckMenuAndTB();
 	setLangStatus(buf->getLangType());
@@ -6039,13 +6042,17 @@ void Notepad_plus::notifyBufferActivated(BufferID bufid, int view)
 	//Make sure the colors of the tab controls match
 	::InvalidateRect(_mainDocTab.getHSelf(), NULL, FALSE);
 	::InvalidateRect(_subDocTab.getHSelf(), NULL, FALSE);
+	startupTrace("end", L"activation.chrome");
 
 	SCNotification scnN;
 	scnN.nmhdr.code = NPPN_BUFFERACTIVATED;
 	scnN.nmhdr.hwndFrom = _pPublicInterface->getHSelf();
 	scnN.nmhdr.idFrom = (uptr_t)bufid;
+	startupTrace("begin", L"activation.plugins");
 	_pluginsManager.notify(&scnN);
+	startupTrace("end", L"activation.plugins");
 
+	startupTrace("begin", L"activation.panels");
 	if (_pDocumentListPanel)
 	{
 		_pDocumentListPanel->activateItem(bufid, currentView());
@@ -6061,6 +6068,7 @@ void Notepad_plus::notifyBufferActivated(BufferID bufid, int view)
 	{
 		_pFuncList->reload();
 	}
+	startupTrace("end", L"activation.panels");
 
 	_linkTriggered = true;
 }
