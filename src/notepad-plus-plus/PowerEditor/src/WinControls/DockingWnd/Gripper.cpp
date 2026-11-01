@@ -721,7 +721,7 @@ DockingCont* Gripper::contHitTest(POINT pt)
 	for (size_t iCont = 0, len = vCont.size(); iCont < len; ++iCont)
 	{
 		/* test if within caption */
-		if (hWnd == vCont[iCont]->getCaptionWnd())
+		if (vCont[iCont]->isCreated() && hWnd == vCont[iCont]->getCaptionWnd())
 		{
 			if (vCont[iCont]->isFloating())
 			{
