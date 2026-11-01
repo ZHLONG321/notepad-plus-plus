@@ -26,6 +26,50 @@
 
 bool DocTabView::_hideTabBarStatus = false;
 
+namespace
+{
+TCITEM makeBufferItem(Buffer* buffer, int mask, TCHAR* encodedLabel, bool includeBuffer)
+{
+	TCITEM item = {};
+	if (includeBuffer)
+	{
+		item.mask = TCIF_PARAM;
+		item.lParam = reinterpret_cast<LPARAM>(buffer->getID());
+	}
+	if (mask & (BufferChangeReadonly | BufferChangeDirty))
+	{
+		item.mask |= TCIF_IMAGE;
+		item.iImage = buffer->isDirty() ? UNSAVED_IMG_INDEX : SAVED_IMG_INDEX;
+		if (buffer->isMonitoringOn())
+			item.iImage = MONITORING_IMG_INDEX;
+		else if (buffer->isReadOnly())
+			item.iImage = REDONLY_IMG_INDEX;
+	}
+	if (mask & BufferChangeFilename)
+	{
+		item.mask |= TCIF_TEXT;
+		item.pszText = encodedLabel;
+		const TCHAR* in = buffer->getFileName();
+		TCHAR* out = encodedLabel;
+		// Preserve the tab control's existing ampersand encoding.
+		while (*in != 0)
+		{
+			if (*in == '&')
+			{
+				*out++ = '&';
+				*out++ = '&';
+				while (*(++in) == '&')
+					*out++ = '&';
+			}
+			else
+				*out++ = *in++;
+		}
+		*out = '\0';
+	}
+	return item;
+}
+}
+
 void DocTabView::addBuffer(BufferID buffer)
 {
 	if (buffer == BUFFER_INVALID)	//valid only
@@ -33,18 +77,13 @@ void DocTabView::addBuffer(BufferID buffer)
 	if (this->getIndexByBuffer(buffer) != -1)	//no duplicates
 		return;
 	Buffer * buf = MainFileManager.getBufferByID(buffer);
-	TCITEM tie;
-	tie.mask = TCIF_TEXT | TCIF_IMAGE | TCIF_PARAM;
-
-	int index = -1;
-	if (_hasImgLst)
-		index = 0;
-	tie.iImage = index;
-	tie.pszText = const_cast<TCHAR *>(buf->getFileName());
-	tie.lParam = reinterpret_cast<LPARAM>(buffer);
+	TCHAR encodedLabel[2 * MAX_PATH];
+	TCITEM tie = makeBufferItem(buf, BufferChangeMask, encodedLabel, true);
 	::SendMessage(_hSelf, TCM_INSERTITEM, _nbItem++, reinterpret_cast<LPARAM>(&tie));
-	// The filename update lays out the newly inserted tab once.
-	bufferUpdated(buf, BufferChangeMask);
+	// Insert the final label and image together, without looking up and
+	// rewriting the newly inserted item before the first layout.
+	if (!_hideTabBarStatus && getTabBarThickness() != _tabBarThickness)
+		::SendMessage(_hParent, WM_SIZE, 0, 0);
 }
 
 
@@ -133,53 +172,8 @@ void DocTabView::bufferUpdated(Buffer * buffer, int mask)
 	if (index == -1)
 		return;
 
-	TCITEM tie;
-	tie.lParam = -1;
-	tie.mask = 0;
-
-	if (mask & BufferChangeReadonly || mask & BufferChangeDirty)
-	{
-		tie.mask |= TCIF_IMAGE;
-		tie.iImage = buffer->isDirty()?UNSAVED_IMG_INDEX:SAVED_IMG_INDEX;
-		if (buffer->isMonitoringOn())
-		{
-			tie.iImage = MONITORING_IMG_INDEX;
-		}
-		else if (buffer->isReadOnly())
-		{
-			tie.iImage = REDONLY_IMG_INDEX;
-		}
-	}
-
-	//We must make space for the added ampersand characters.
 	TCHAR encodedLabel[2 * MAX_PATH];
-
-	if (mask & BufferChangeFilename)
-	{
-		tie.mask |= TCIF_TEXT;
-		tie.pszText = const_cast<TCHAR *>(encodedLabel);
-
-		{
-			const TCHAR* in = buffer->getFileName();
-			TCHAR* out = encodedLabel;
-
-			//This code will read in one character at a time and duplicate every first ampersand(&).
-			//ex. If input is "test & test && test &&&" then output will be "test && test &&& test &&&&".
-			//Tab's caption must be encoded like this because otherwise tab control would make tab too small or too big for the text.
-
-			while (*in != 0)
-			if (*in == '&')
-			{
-				*out++ = '&';
-				*out++ = '&';
-				while (*(++in) == '&')
-					*out++ = '&';
-			}
-			else
-				*out++ = *in++;
-			*out = '\0';
-		}
-	}
+	TCITEM tie = makeBufferItem(buffer, mask, encodedLabel, false);
 
 	::SendMessage(_hSelf, TCM_SETITEM, index, reinterpret_cast<LPARAM>(&tie));
 
@@ -196,13 +190,12 @@ void DocTabView::setBuffer(size_t index, BufferID id)
 	if (index < 0 || index >= _nbItem)
 		return;
 
-	TCITEM tie;
-	tie.lParam = reinterpret_cast<LPARAM>(id);
-	tie.mask = TCIF_PARAM;
+	TCHAR encodedLabel[2 * MAX_PATH];
+	TCITEM tie = makeBufferItem(MainFileManager.getBufferByID(id), BufferChangeMask, encodedLabel, true);
 	::SendMessage(_hSelf, TCM_SETITEM, index, reinterpret_cast<LPARAM>(&tie));
 
-	// The filename update also requests the parent layout once.
-	bufferUpdated(MainFileManager.getBufferByID(id), BufferChangeMask);
+	if (!_hideTabBarStatus && getTabBarThickness() != _tabBarThickness)
+		::SendMessage(_hParent, WM_SIZE, 0, 0);
 }
 
 
