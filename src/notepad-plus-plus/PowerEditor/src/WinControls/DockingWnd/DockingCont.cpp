@@ -101,8 +101,15 @@ void DockingCont::doDialog(bool willBeShown, bool isFloating)
 
 		if (_isFloating)
 		{
+			// The resource starts as a hidden child to avoid startup activation.
+			// A floating container needs a top-level owner relationship as well
+			// as popup styles; changing styles alone leaves it a clipped child.
+			::SetParent(_hSelf, nullptr);
 			::SetWindowLongPtr(_hSelf, GWL_STYLE, POPUP_STYLES);
 			::SetWindowLongPtr(_hSelf, GWL_EXSTYLE, POPUP_EXSTYLES);
+			::SetWindowLongPtr(_hSelf, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(_hParent));
+			::SetWindowPos(_hSelf, nullptr, 0, 0, 0, 0,
+				SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE);
 			::ShowWindow(_hCaption, SW_HIDE);
 		}
 		else
