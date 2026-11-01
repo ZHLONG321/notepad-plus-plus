@@ -1627,14 +1627,24 @@ namespace NppDarkMode
 				break;
 		}
 
-		auto hTips = msg ? reinterpret_cast<HWND>(::SendMessage(hwnd, msg, 0, 0)) : hwnd;
+		auto hTips = hwnd;
+		if (msg)
+		{
+			StartupTraceScope trace(L"tooltip.getWindow");
+			hTips = reinterpret_cast<HWND>(::SendMessage(hwnd, msg, 0, 0));
+		}
 		if (hTips == nullptr)
 			return;
 
 		// A hidden tooltip needs no theme resources until its first interaction.
 		// The subclass also covers direct display and rendering, before any paint.
-		if (!::IsWindowVisible(hTips) &&
-			SetWindowSubclass(hTips, TooltipThemeSubclass, g_tooltipThemeSubclassID, 0))
+		BOOL subclassed = FALSE;
+		if (!::IsWindowVisible(hTips))
+		{
+			StartupTraceScope trace(L"tooltip.subclass");
+			subclassed = SetWindowSubclass(hTips, TooltipThemeSubclass, g_tooltipThemeSubclassID, 0);
+		}
+		if (subclassed)
 		{
 			startupTrace("tooltip.theme.pending");
 			return;
