@@ -18,45 +18,18 @@
 #include <time.h>
 #include <shlwapi.h>
 #include "Notepad_plus_Window.h"
+#include "NppDarkMode.h"
 
 const TCHAR Notepad_plus_Window::_className[32] = TEXT("Notepad++");
 HWND Notepad_plus_Window::gNppHWND = NULL;
 
 
 
-namespace // anonymous
-{
-
-	struct PaintLocker final
-	{
-		explicit PaintLocker(HWND handle)
-			: handle(handle)
-		{
-			// disallow drawing on the window
-			LockWindowUpdate(handle);
-		}
-
-		~PaintLocker()
-		{
-			// re-allow drawing for the window
-			LockWindowUpdate(NULL);
-
-			// force re-draw
-			InvalidateRect(handle, nullptr, TRUE);
-			RedrawWindow(handle, nullptr, NULL, RDW_ERASE | RDW_ALLCHILDREN | RDW_FRAME | RDW_INVALIDATE);
-		}
-
-		HWND handle;
-	};
-
-} // anonymous namespace
-
-
-
-
+#include "StartupTrace.h"
 
 void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLine, CmdLineParams *cmdLineParams)
 {
+	startupTrace("window.init.begin");
 	time_t timestampBegin = 0;
 	if (cmdLineParams->_showLoadingTime)
 		timestampBegin = time(NULL);
@@ -71,7 +44,7 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 	nppClass.hInstance = _hInst;
 	nppClass.hIcon = ::LoadIcon(hInst, MAKEINTRESOURCE(IDI_M30ICON));
 	nppClass.hCursor = ::LoadCursor(NULL, IDC_ARROW);
-	nppClass.hbrBackground = ::CreateSolidBrush(::GetSysColor(COLOR_MENU));
+	nppClass.hbrBackground = NppDarkMode::isEnabled() ? NppDarkMode::getDarkerBackgroundBrush() : ::GetSysColorBrush(COLOR_MENU);
 	nppClass.lpszMenuName = MAKEINTRESOURCE(IDR_M30_MENU);
 	nppClass.lpszClassName = _className;
 
@@ -96,7 +69,7 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		WS_EX_ACCEPTFILES | (_notepad_plus_plus_core._nativeLangSpeaker.isRTL()?WS_EX_LAYOUTRTL:0),
 		_className,
 		TEXT("Notepad++"),
-		(WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN),
+		(WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | (cmdLineParams->_noActivate && nppGUI._isMaximized ? WS_MAXIMIZE : 0)),
 		// CreateWindowEx bug : set all 0 to walk around the pb
 		0, 0, 0, 0,
 		_hParent, nullptr, _hInst,
@@ -108,7 +81,7 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		throw std::runtime_error("Notepad_plus_Window::init : CreateWindowEx() function return null");
 
 
-	PaintLocker paintLocker{_hSelf};
+	startupTrace("window.created");
 
 	_notepad_plus_plus_core.staticCheckMenuAndTB();
 
@@ -126,7 +99,7 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		if (_isPrelaunch)
 			posInfo.showCmd = SW_HIDE;
 		else
-			posInfo.showCmd = nppGUI._isMaximized ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL;
+			posInfo.showCmd = SW_HIDE; // Size the hidden window before restoring its contents.
 
 		posInfo.ptMinPosition.x = (LONG)-1;
 		posInfo.ptMinPosition.y = (LONG)-1;
@@ -164,23 +137,8 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 	if (nppGUI._rememberLastSession && !nppGUI._isCmdlineNosessionActivated)
 		_notepad_plus_plus_core.loadLastSession();
 
-	if (nppParams.doFunctionListExport() || nppParams.doPrintAndExit())
-	{
-		::ShowWindow(_hSelf, SW_HIDE);
-	}
-	else if (!cmdLineParams->_isPreLaunch)
-	{
-		if (cmdLineParams->isPointValid())
-			::ShowWindow(_hSelf, SW_SHOW);
-		else
-			::ShowWindow(_hSelf, nppGUI._isMaximized ? SW_MAXIMIZE : SW_SHOW);
-	}
-	else
-	{
-		_notepad_plus_plus_core._pTrayIco = new trayIconControler(_hSelf, IDI_M30ICON, NPPM_INTERNAL_MINIMIZED_TRAY, ::LoadIcon(_hInst, MAKEINTRESOURCE(IDI_M30ICON)), TEXT(""));
-		_notepad_plus_plus_core._pTrayIco->doTrayIcon(ADD);
-	}
 	std::vector<generic_string> fileNames;
+	startupTrace("window.positioned");
 	std::vector<generic_string> patterns;
 	patterns.push_back(TEXT("*.xml"));
 
@@ -260,7 +218,28 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		generic_string emptyStr;
 		_notepad_plus_plus_core.launchFileBrowser(fns, emptyStr, true);
 	}
-	::SendMessage(_hSelf, WM_ACTIVATE, WA_ACTIVE, 0);
+	// Present only after layout, files and saved panels have been restored.
+	if (nppParams.doFunctionListExport() || nppParams.doPrintAndExit())
+	{
+		::ShowWindow(_hSelf, SW_HIDE);
+	}
+	else if (!cmdLineParams->_isPreLaunch)
+	{
+		if (cmdLineParams->_noActivate)
+			::ShowWindow(_hSelf, SW_SHOWNA);
+		else if (cmdLineParams->isPointValid())
+			::ShowWindow(_hSelf, SW_SHOW);
+		else
+			::ShowWindow(_hSelf, nppGUI._isMaximized ? SW_MAXIMIZE : SW_SHOW);
+	}
+	else
+	{
+		_notepad_plus_plus_core._pTrayIco = new trayIconControler(_hSelf, IDI_M30ICON, NPPM_INTERNAL_MINIMIZED_TRAY, ::LoadIcon(_hInst, MAKEINTRESOURCE(IDI_M30ICON)), TEXT(""));
+		_notepad_plus_plus_core._pTrayIco->doTrayIcon(ADD);
+	}
+	startupTrace("window.shown");
+	if (!cmdLineParams->_noActivate)
+		::SendMessage(_hSelf, WM_ACTIVATE, WA_ACTIVE, 0);
 
 	// Notify plugins that Notepad++ is ready
 	SCNotification scnN;
@@ -268,6 +247,7 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 	scnN.nmhdr.hwndFrom = _hSelf;
 	scnN.nmhdr.idFrom = 0;
 	_notepad_plus_plus_core._pluginsManager.notify(&scnN);
+	startupTrace("plugins.ready");
 
 	if (!cmdLineParams->_easterEggName.empty())
 	{

@@ -18,6 +18,7 @@
 #include <stdexcept>
 #include <memory>
 #include "ImageListSet.h"
+#include "StartupTrace.h"
 #include "NppDarkMode.h"
 
 void IconList::init(HINSTANCE hInst, int iconSize) 
@@ -87,45 +88,44 @@ void ToolBarIcons::init(ToolBarButtonUnit *buttonUnitArray, int arraySize, std::
 
 void ToolBarIcons::reInit(int size)
 {
-	ImageList_SetIconSize(getDefaultLst(), size, size);
-	ImageList_SetIconSize(getDisableLst(), size, size);
+    // The next access rebuilds only the lists selected by the toolbar.
+    for (bool& dirty : _listDirty)
+        dirty = true;
+    _iconSize = size;
+}
 
-	ImageList_SetIconSize(getDefaultLstSet2(), size, size);
-	ImageList_SetIconSize(getDisableLstSet2(), size, size);
+HIMAGELIST ToolBarIcons::getList(int index) const
+{
+    IconList& list = _iconListVector[index];
+    if (list.getHandle() && !_listDirty[index])
+        return list.getHandle();
+    if (list.getHandle())
+        ImageList_SetIconSize(list.getHandle(), _iconSize, _iconSize);
+    else
+        list.init(_hInst, _iconSize);
+    for (const auto& button : _tbiis)
+    {
+        if (button._defaultIcon != -1)
+        {
+            const int icons[] = {button._defaultIcon, button._grayIcon,
+                button._defaultIcon2, button._grayIcon2,
+                button._defaultDarkModeIcon, button._grayDarkModeIcon,
+                button._defaultDarkModeIcon2, button._grayDarkModeIcon2};
+            list.addIcon(icons[index]);
+        }
+    }
+    startupTrace("toolbar.selected.builtin.icons.ready");
+    HDC dcScreen = nullptr;
+    for (const auto& i : _moreCmds)
+    {
+		HICON hIcon = i._hIcon;
+		bool ownsIcon = false;
 
-	ImageList_SetIconSize(getDefaultLstDM(), size, size);
-	ImageList_SetIconSize(getDisableLstDM(), size, size);
-
-	ImageList_SetIconSize(getDefaultLstSetDM2(), size, size);
-	ImageList_SetIconSize(getDisableLstSetDM2(), size, size);
-
-	for (size_t i = 0, len = _tbiis.size(); i < len; ++i)
-	{
-		if (_tbiis[i]._defaultIcon != -1)
+		if (index < HLIST_DEFAULT_DM)
 		{
-			_iconListVector[HLIST_DEFAULT].addIcon(_tbiis[i]._defaultIcon);
-			_iconListVector[HLIST_DISABLE].addIcon(_tbiis[i]._grayIcon);
-			_iconListVector[HLIST_DEFAULT2].addIcon(_tbiis[i]._defaultIcon2);
-			_iconListVector[HLIST_DISABLE2].addIcon(_tbiis[i]._grayIcon2);
-
-			_iconListVector[HLIST_DEFAULT_DM].addIcon(_tbiis[i]._defaultDarkModeIcon);
-			_iconListVector[HLIST_DISABLE_DM].addIcon(_tbiis[i]._grayDarkModeIcon);
-			_iconListVector[HLIST_DEFAULT_DM2].addIcon(_tbiis[i]._defaultDarkModeIcon2);
-			_iconListVector[HLIST_DISABLE_DM2].addIcon(_tbiis[i]._grayDarkModeIcon2);
+			// Light toolbar lists retain the original plugin icon.
 		}
-	}
-
-	// Add dynamic icons (from plugins)
-	for (auto i : _moreCmds)
-	{
-		_iconListVector[HLIST_DEFAULT].addIcon(i._hIcon);
-		_iconListVector[HLIST_DISABLE].addIcon(i._hIcon);
-		_iconListVector[HLIST_DEFAULT2].addIcon(i._hIcon);
-		_iconListVector[HLIST_DISABLE2].addIcon(i._hIcon);
-
-		HICON hIcon = nullptr;
-
-		if (i._hIcon_DM)
+		else if (i._hIcon_DM)
 		{
 			hIcon = i._hIcon_DM;
 		}
@@ -134,7 +134,8 @@ void ToolBarIcons::reInit(int size)
 			ICONINFO iconinfoSrc;
 			GetIconInfo(i._hIcon, &iconinfoSrc);
 
-			HDC dcScreen = ::GetDC(NULL);
+			if (!dcScreen)
+				dcScreen = ::GetDC(NULL);
 
 			BITMAP bmp;
 			int nbByteBmp = ::GetObject(iconinfoSrc.hbmColor, sizeof(BITMAP), &bmp);
@@ -190,7 +191,6 @@ void ToolBarIcons::reInit(int size)
 
 				SetDIBits(dcScreen, hBmpNew, 0, bi.biHeight, dibits.get(), (BITMAPINFO*)&bi, DIB_RGB_COLORS);
 
-				::ReleaseDC(NULL, dcScreen);
 
 				ICONINFO iconinfoDest = { 0 };
 				iconinfoDest.fIcon = TRUE;
@@ -198,54 +198,33 @@ void ToolBarIcons::reInit(int size)
 				iconinfoDest.hbmMask = iconinfoSrc.hbmMask;
 
 				hIcon = ::CreateIconIndirect(&iconinfoDest);
+				if (hIcon) ownsIcon = true;
+				else hIcon = i._hIcon;
 
 				::DeleteObject(hBmpNew);
 				::DeleteObject(iconinfoSrc.hbmColor);
 				::DeleteObject(iconinfoSrc.hbmMask);
 			}
 		}
-		_iconListVector[HLIST_DEFAULT_DM].addIcon(hIcon);
-		_iconListVector[HLIST_DISABLE_DM].addIcon(hIcon);
-		_iconListVector[HLIST_DEFAULT_DM2].addIcon(hIcon);
-		_iconListVector[HLIST_DISABLE_DM2].addIcon(hIcon);
-	}
+
+        list.addIcon(hIcon);
+        if (ownsIcon) ::DestroyIcon(hIcon);
+    }
+    if (dcScreen) ::ReleaseDC(NULL, dcScreen);
+    _listDirty[index] = false;
+    return list.getHandle();
 }
 
 
 void ToolBarIcons::create(HINSTANCE hInst, int iconSize)
 {
-	_iconListVector.push_back(IconList());
-	_iconListVector.push_back(IconList());
-	_iconListVector.push_back(IconList());
-	_iconListVector.push_back(IconList());
-	
-	_iconListVector.push_back(IconList());
-	_iconListVector.push_back(IconList());
-	_iconListVector.push_back(IconList());
-	_iconListVector.push_back(IconList());
-	
-
-	_iconListVector[HLIST_DEFAULT].init(hInst, iconSize);
-	_iconListVector[HLIST_DISABLE].init(hInst, iconSize);
-	_iconListVector[HLIST_DEFAULT2].init(hInst, iconSize);
-	_iconListVector[HLIST_DISABLE2].init(hInst, iconSize);
-
-	_iconListVector[HLIST_DEFAULT_DM].init(hInst, iconSize);
-	_iconListVector[HLIST_DISABLE_DM].init(hInst, iconSize);
-	_iconListVector[HLIST_DEFAULT_DM2].init(hInst, iconSize);
-	_iconListVector[HLIST_DISABLE_DM2].init(hInst, iconSize);
-
-	reInit(iconSize);
+    _hInst = hInst;
+    _iconSize = iconSize;
+    _iconListVector.resize(8);
 }
 
 void ToolBarIcons::destroy()
 {
-	_iconListVector[HLIST_DEFAULT].destroy();
-	_iconListVector[HLIST_DEFAULT2].destroy();
-	_iconListVector[HLIST_DISABLE].destroy();
-	_iconListVector[HLIST_DISABLE2].destroy();
+    for (auto& list : _iconListVector)
+        list.destroy();
 }
-
-
-
-

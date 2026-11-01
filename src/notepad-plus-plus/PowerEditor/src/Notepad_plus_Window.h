@@ -24,6 +24,7 @@ notepad++ [--help] [-multiInst] [-noPlugin] [-lLanguage] [-udl=\"My UDL Name\"] 
 \r\
 --help : This help message\r\
 -multiInst : Launch another Notepad++ instance\r\
+-noActivate : Show the new window without taking foreground focus\r\
 -noPlugin : Launch Notepad++ without loading any plugin\r\
 -l : Open file or Ghost type with syntax highlighting of choice\r\
 -udl=\"My UDL Name\": Open file by applying User Defined Language\r\

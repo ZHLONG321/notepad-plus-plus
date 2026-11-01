@@ -947,14 +947,17 @@ void ScintillaAccelerator::updateKeys()
 				for (index = 0; index < size; ++index)
 					::SendMessage(_vScintillas[i], SCI_ASSIGNCMDKEY, skm.toKeyDef(index), skm.getScintillaKeyID());
 			}
-			if (skm.getMenuCmdID() != 0) 
-			{
-				updateMenuItemByID(skm, skm.getMenuCmdID());
-			}
 			if (j == 0)	//j is unsigned, so default method doesnt work
 				break;
 		}
 	}
+	// Both editors share one menu. Update its labels once, after all key maps.
+	for (int32_t j = static_cast<int32_t>(mapSize) - 1; j >= 0; --j)
+	{
+		if (map[j].getMenuCmdID() != 0)
+			updateMenuItemByID(map[j], map[j].getMenuCmdID());
+	}
+	::DrawMenuBar(_hMenuParent);
 }
 
 void ScintillaAccelerator::updateMenuItemByID(const ScintillaKeyMap& skm, int id)
@@ -980,7 +983,6 @@ void ScintillaAccelerator::updateMenuItemByID(const ScintillaKeyMap& skm, int id
 		menuItem += skm.toString();
 	}
 	::ModifyMenu(_hAccelMenu, id, MF_BYCOMMAND, id, menuItem.c_str());
-	::DrawMenuBar(_hMenuParent);
 }
 
 //This procedure uses _keyCombo as a temp. variable to store current settings which can then later be applied (by pressing OK)

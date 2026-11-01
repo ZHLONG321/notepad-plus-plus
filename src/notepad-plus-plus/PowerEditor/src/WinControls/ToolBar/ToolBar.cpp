@@ -16,6 +16,7 @@
 
 #include <stdexcept>
 #include "ToolBar.h"
+#include "StartupTrace.h"
 #include "shortcut.h"
 #include "Parameters.h"
 #include "FindReplaceDlg_rc.h"
@@ -103,6 +104,7 @@ bool ToolBar::init( HINSTANCE hInst, HWND hPere, toolBarStatusType type, ToolBar
 
 	_toolBarIcons.init(buttonUnitArray, arraySize, _vDynBtnReg);
 	_toolBarIcons.create(_hInst, iconSize);
+	startupTrace("toolbar.icons.ready");
 	
 	INITCOMMONCONTROLSEX icex;
 	icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
@@ -166,6 +168,7 @@ bool ToolBar::init( HINSTANCE hInst, HWND hPere, toolBarStatusType type, ToolBar
 	}
 
 	reset(true);	//load icons etc
+	startupTrace("toolbar.reset.ready");
 
 	return true;
 }

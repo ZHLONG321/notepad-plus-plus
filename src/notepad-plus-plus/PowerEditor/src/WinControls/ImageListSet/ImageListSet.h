@@ -31,7 +31,8 @@ public :
 	void create(int iconSize, HINSTANCE hInst, int *iconIDArray, int iconIDArraySize);
 
 	void destroy() {
-		ImageList_Destroy(_hImglst);
+		if (_hImglst) ImageList_Destroy(_hImglst);
+		_hImglst = nullptr;
 	};
 	HIMAGELIST getHandle() const {return _hImglst;};
 	void addIcon(int iconID) const;
@@ -98,35 +99,35 @@ public :
 	void destroy();
 
 	HIMAGELIST getDefaultLst() const {
-		return _iconListVector[HLIST_DEFAULT].getHandle();
+		return getList(HLIST_DEFAULT);
 	};
 
 	HIMAGELIST getDisableLst() const {
-		return _iconListVector[HLIST_DISABLE].getHandle();
+		return getList(HLIST_DISABLE);
 	};
 
 	HIMAGELIST getDefaultLstSet2() const {
-		return _iconListVector[HLIST_DEFAULT2].getHandle();
+		return getList(HLIST_DEFAULT2);
 	};
 
 	HIMAGELIST getDisableLstSet2() const {
-		return _iconListVector[HLIST_DISABLE2].getHandle();
+		return getList(HLIST_DISABLE2);
 	};
 
 	HIMAGELIST getDefaultLstDM() const {
-		return _iconListVector[HLIST_DEFAULT_DM].getHandle();
+		return getList(HLIST_DEFAULT_DM);
 	};
 
 	HIMAGELIST getDisableLstDM() const {
-		return _iconListVector[HLIST_DISABLE_DM].getHandle();
+		return getList(HLIST_DISABLE_DM);
 	};
 
 	HIMAGELIST getDefaultLstSetDM2() const {
-		return _iconListVector[HLIST_DEFAULT_DM2].getHandle();
+		return getList(HLIST_DEFAULT_DM2);
 	};
 
 	HIMAGELIST getDisableLstSetDM2() const {
-		return _iconListVector[HLIST_DISABLE_DM2].getHandle();
+		return getList(HLIST_DISABLE_DM2);
 	};
 
 	void resizeIcon(int size) {
@@ -144,6 +145,7 @@ public :
 			(witchList != HLIST_DEFAULT2) && (witchList != HLIST_DISABLE2))
 			return false;
 
+		getList(witchList);
 		return _iconListVector[witchList].changeIcon(iconIndex, iconLocation);
 	};
 
@@ -151,6 +153,10 @@ private :
 	ToolBarIconIDs _tbiis;
 	std::vector<DynamicCmdIcoBmp> _moreCmds;
 
-	std::vector<IconList> _iconListVector;
+	HIMAGELIST getList(int index) const;
+	HINSTANCE _hInst = nullptr;
+	int _iconSize = 0;
+	mutable std::vector<IconList> _iconListVector;
+	mutable bool _listDirty[8] = {true, true, true, true, true, true, true, true};
 };
 

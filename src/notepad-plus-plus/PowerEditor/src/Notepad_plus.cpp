@@ -40,6 +40,7 @@
 #include "fileBrowser.h"
 #include "Common.h"
 #include "NppDarkMode.h"
+#include "StartupTrace.h"
 
 using namespace std;
 
@@ -192,6 +193,7 @@ Notepad_plus::~Notepad_plus()
 
 LRESULT Notepad_plus::init(HWND hwnd)
 {
+	startupTrace("core.init.begin");
 	NppParameters& nppParam = NppParameters::getInstance();
 	NppGUI & nppGUI = nppParam.getNppGUI();
 
@@ -213,8 +215,10 @@ LRESULT Notepad_plus::init(HWND hwnd)
 
 	_fileEditView.init(_pPublicInterface->getHinst(), hwnd);
 	MainFileManager.init(this, &_fileEditView); //get it up and running asap.
+	startupTrace("core.scintillas.ready");
 
 	nppParam.setFontList(hwnd);
+	startupTrace("core.fonts.ready");
 
 
 	_mainWindowStatus = WindowMainActive;
@@ -246,6 +250,7 @@ LRESULT Notepad_plus::init(HWND hwnd)
 	_invisibleEditView.execute(SCI_SETUNDOCOLLECTION);
 	_invisibleEditView.execute(SCI_EMPTYUNDOBUFFER);
 	_invisibleEditView.wrap(false); // Make sure no slow down
+	startupTrace("views.hidden.ready");
 
 	// Configuration of 2 scintilla views
 	_mainEditView.showMargin(ScintillaEditView::_SC_MARGE_LINENUMBER, svp._lineNumberMarginShow);
@@ -266,8 +271,10 @@ LRESULT Notepad_plus::init(HWND hwnd)
 	//Marker Margin config
 	_mainEditView.setMakerStyle(svp._folderStyle);
 	_subEditView.setMakerStyle(svp._folderStyle);
+	startupTrace("views.markers.ready");
 	_mainEditView.defineDocType(_mainEditView.getCurrentBuffer()->getLangType());
 	_subEditView.defineDocType(_subEditView.getCurrentBuffer()->getLangType());
+	startupTrace("views.doctype.ready");
 
 	//Line wrap method
 	_mainEditView.setWrapMode(svp._lineWrapMethod);
@@ -307,10 +314,12 @@ LRESULT Notepad_plus::init(HWND hwnd)
 
 	_mainEditView.performGlobalStyles();
 	_subEditView.performGlobalStyles();
+	startupTrace("views.styles.ready");
 
 	_zoomOriginalValue = static_cast<int32_t>(_pEditView->execute(SCI_GETZOOM));
 	_mainEditView.execute(SCI_SETZOOM, svp._zoom);
 	_subEditView.execute(SCI_SETZOOM, svp._zoom2);
+	startupTrace("views.zoom.ready");
 
 	::SendMessage(hwnd, NPPM_INTERNAL_SETMULTISELCTION, 0, 0);
 
@@ -373,6 +382,7 @@ LRESULT Notepad_plus::init(HWND hwnd)
 	int splitterSizeDyn = nppParam._dpiManager.scaleX(splitterSize);
 	_subSplitter.init(_pPublicInterface->getHinst(), hwnd);
 	_subSplitter.create(&_mainDocTab, &_subDocTab, splitterSizeDyn, SplitterMode::DYNAMIC, 50, isVertical);
+	startupTrace("views.splitter.ready");
 
 	//--Status Bar Section--//
 	bool willBeShown = nppGUI._statusBarShow;
@@ -387,6 +397,7 @@ LRESULT Notepad_plus::init(HWND hwnd)
 	_pMainWindow = &_mainDocTab;
 
 	_dockingManager.init(_pPublicInterface->getHinst(), hwnd, &_pMainWindow);
+	startupTrace("views.docking.ready");
 
 	if (nppGUI._isMinimizedToTray && _pTrayIco == NULL)
 	{
@@ -404,8 +415,10 @@ LRESULT Notepad_plus::init(HWND hwnd)
 
 	_scintillaCtrls4Plugins.init(_pPublicInterface->getHinst(), hwnd);
 	_pluginsManager.init(nppData);
+	startupTrace("core.views.ready");
 
 	_pluginsManager.loadPluginsV2(nppParam.getPluginRootDir());
+	startupTrace("core.plugins.ready");
 	_restoreButton.init(_pPublicInterface->getHinst(), hwnd);
 
 	// ------------ //
@@ -567,6 +580,7 @@ LRESULT Notepad_plus::init(HWND hwnd)
 	}
 
 	updateCommandShortcuts();
+	startupTrace("core.menus.ready");
 
 	//Translate non-menu shortcuts
 	_nativeLangSpeaker.changeShortcutLang();
@@ -586,6 +600,7 @@ LRESULT Notepad_plus::init(HWND hwnd)
 
 	nppParam.setScintillaAccelerator(&_scintaccelerator);
 	_scintaccelerator.updateKeys();
+	startupTrace("core.accelerators.ready");
 
 	::DrawMenuBar(hwnd);
 
@@ -604,6 +619,7 @@ LRESULT Notepad_plus::init(HWND hwnd)
 	_toolBar.init(_pPublicInterface->getHinst(), hwnd, tbStatus, toolBarIcons, sizeof(toolBarIcons) / sizeof(ToolBarButtonUnit));
 
 	changeToolBarIcons();
+	startupTrace("core.toolbar.ready");
 
 	_rebarTop.init(_pPublicInterface->getHinst(), hwnd);
 	_rebarBottom.init(_pPublicInterface->getHinst(), hwnd);
@@ -634,6 +650,7 @@ LRESULT Notepad_plus::init(HWND hwnd)
 	_sha2FromFilesDlg.setHashType(hash_sha256);
 	_sha2FromTextDlg.init(_pPublicInterface->getHinst(), hwnd);
 	_sha2FromTextDlg.setHashType(hash_sha256);
+	startupTrace("core.dialogs.ready");
 
 
 	//--User Define Dialog Section--//
@@ -693,6 +710,7 @@ LRESULT Notepad_plus::init(HWND hwnd)
 	//
 
 	DockingManagerData& dmd = nppGUI._dockingData;
+	startupTrace("core.docking.begin");
 
 	_dockingManager.setDockedContSize(CONT_LEFT, nppGUI._dockingData._leftWidth);
 	_dockingManager.setDockedContSize(CONT_RIGHT, nppGUI._dockingData._rightWidth);
@@ -721,12 +739,17 @@ LRESULT Notepad_plus::init(HWND hwnd)
 	}
 
 	//Load initial docs into doctab
+	startupTrace("core.docking.ready");
 	loadBufferIntoView(_mainEditView.getCurrentBufferID(), MAIN_VIEW);
 	loadBufferIntoView(_subEditView.getCurrentBufferID(), SUB_VIEW);
+	startupTrace("buffers.loaded");
 	activateBuffer(_mainEditView.getCurrentBufferID(), MAIN_VIEW);
+	startupTrace("buffers.main.ready");
 	activateBuffer(_subEditView.getCurrentBufferID(), SUB_VIEW);
-	//::SetFocus(_mainEditView.getHSelf());
-	_mainEditView.getFocus();
+	startupTrace("buffers.sub.ready");
+	// WM_ACTIVATE focuses the selected editor after the main window is shown.
+	// Focusing its hidden child here causes an extra activation/IME transition.
+	startupTrace("core.init.end");
 
 	return TRUE;
 }

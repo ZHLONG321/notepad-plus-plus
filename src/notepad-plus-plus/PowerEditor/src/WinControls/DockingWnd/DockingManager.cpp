@@ -17,6 +17,7 @@
 
 #include <stdexcept>
 #include "DockingManager.h"
+#include "StartupTrace.h"
 #include "DockingSplitter.h"
 #include "DockingCont.h"
 #include "Gripper.h"
@@ -140,7 +141,9 @@ void DockingManager::init(HINSTANCE hInst, HWND hWnd, Window ** ppWin)
 	{
 		_vContainer[iCont]->init(_hInst, _hSelf);
 		_vContainer[iCont]->doDialog(false);
+		startupTrace("dock.container.created");
 		::SetParent(_vContainer[iCont]->getHSelf(), _hParent);
+		startupTrace("dock.container.parented");
 
 		if ((iCont == CONT_TOP) || (iCont == CONT_BOTTOM))
 			_vSplitter[iCont]->init(_hInst, _hParent, _hSelf, DMS_HORIZONTAL);
@@ -151,6 +154,7 @@ void DockingManager::init(HINSTANCE hInst, HWND hWnd, Window ** ppWin)
 	if (!hWndServer)
 		hWndServer = _hSelf;
 	CoInitialize(NULL);
+		startupTrace("dock.com.ready");
 	if (!gWinCallHook)	//only set if not already done
 		gWinCallHook = ::SetWindowsHookEx(WH_CALLWNDPROC, focusWndProc, hInst, GetCurrentThreadId());
 

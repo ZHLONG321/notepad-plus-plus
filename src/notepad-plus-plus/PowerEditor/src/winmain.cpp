@@ -294,6 +294,7 @@ int getGhostTypingSpeedFromParam(ParamVector & params)
 }
 
 const TCHAR FLAG_MULTI_INSTANCE[] = TEXT("-multiInst");
+const TCHAR FLAG_NO_ACTIVATE[] = TEXT("-noActivate");
 const TCHAR FLAG_NO_PLUGIN[] = TEXT("-noPlugin");
 const TCHAR FLAG_READONLY[] = TEXT("-ro");
 const TCHAR FLAG_NOSESSION[] = TEXT("-nosession");
@@ -404,8 +405,11 @@ PWSTR stripIgnoredParams(ParamVector & params, PWSTR pCmdLine)
 
 
 
+#include "StartupTrace.h"
+
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int)
 {
+	startupTrace("winmain");
 	generic_string cmdLineString = pCmdLine ? pCmdLine : _T("");
 	ParamVector params;
 	parseCommandLine(pCmdLine, params);
@@ -438,6 +442,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int)
 	cmdLineParams._isNoSession = isInList(FLAG_NOSESSION, params);
 	cmdLineParams._isPreLaunch = isInList(FLAG_SYSTRAY, params);
 	cmdLineParams._alwaysOnTop = isInList(FLAG_ALWAYS_ON_TOP, params);
+	cmdLineParams._noActivate = isInList(FLAG_NO_ACTIVATE, params);
 	cmdLineParams._showLoadingTime = isInList(FLAG_LOADINGTIME, params);
 	cmdLineParams._isSessionFile = isInList(FLAG_OPENSESSIONFILE, params);
 	cmdLineParams._isRecursive = isInList(FLAG_RECURSIVE, params);
@@ -505,7 +510,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int)
 		nppParameters.setStartWithLocFileName(cmdLineParams._localizationPath);
 	}
 
+	startupTrace("parameters.begin");
 	nppParameters.load();
+	startupTrace("parameters.end");
 
 	NppGUI & nppGui = nppParameters.getNppGUI();
 
@@ -583,10 +590,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int)
 			else if (::IsIconic(hNotepad_plus))
 				sw = SW_RESTORE;
 
-			if (sw != 0)
+			if (sw != 0 && !cmdLineParams._noActivate)
 				::ShowWindow(hNotepad_plus, sw);
 
-			::SetForegroundWindow(hNotepad_plus);
+			if (!cmdLineParams._noActivate)
+				::SetForegroundWindow(hNotepad_plus);
 
 			if (params.size() > 0)	//if there are files to open, use the WM_COPYDATA system
 			{

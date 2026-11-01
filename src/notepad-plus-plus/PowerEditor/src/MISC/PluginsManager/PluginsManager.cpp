@@ -21,6 +21,7 @@
 #include <cinttypes>
 #include "PluginsManager.h"
 #include "resource.h"
+#include "StartupTrace.h"
 
 using namespace std;
 
@@ -101,6 +102,7 @@ static WORD getBinaryArchitectureType(const TCHAR *filePath)
 int PluginsManager::loadPlugin(const TCHAR *pluginFilePath)
 {
 	const TCHAR *pluginFileName = ::PathFindFileName(pluginFilePath);
+	StartupTraceScope startupScope(pluginFileName);
 	if (isInLoadedDlls(pluginFileName))
 		return 0;
 
@@ -123,7 +125,9 @@ int PluginsManager::loadPlugin(const TCHAR *pluginFilePath)
 		}
 
         const DWORD dwFlags = GetProcAddress(GetModuleHandle(TEXT("kernel32.dll")), "AddDllDirectory") != NULL ? LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_DEFAULT_DIRS : 0;
+        startupTrace("loadlibrary.begin", pluginFileName);
         pi->_hLib = ::LoadLibraryEx(pluginFilePath, NULL, dwFlags);
+        startupTrace("loadlibrary.end", pluginFileName);
         if (!pi->_hLib)
         {
 			generic_string lastErrorMsg = GetLastErrorAsString();
@@ -155,13 +159,16 @@ int PluginsManager::loadPlugin(const TCHAR *pluginFilePath)
 		if (!pi->_pMessageProc)
 			throw generic_string(TEXT("Missing \"messageProc\" function"));
 
+		startupTrace("setinfo.begin", pluginFileName);
 		pi->_pFuncSetInfo(_nppData);
+		startupTrace("setinfo.end", pluginFileName);
 
 		pi->_pFuncGetFuncsArray = (PFUNCGETFUNCSARRAY)GetProcAddress(pi->_hLib, "getFuncsArray");
 		if (!pi->_pFuncGetFuncsArray)
 			throw generic_string(TEXT("Missing \"getFuncsArray\" function"));
 
 		pi->_funcItems = pi->_pFuncGetFuncsArray(&pi->_nbFuncItem);
+		startupTrace("commands.ready", pluginFileName);
 
 		if ((!pi->_funcItems) || (pi->_nbFuncItem <= 0))
 			throw generic_string(TEXT("Missing \"FuncItems\" array, or the nb of Function Item is not set correctly"));
@@ -573,7 +580,10 @@ void PluginsManager::notify(size_t indexPluginInfo, const SCNotification *notifi
 		SCNotification scNotif = *notification;
 		try
 		{
+			const bool traceLifecycle = scNotif.nmhdr.code == NPPN_READY || scNotif.nmhdr.code == NPPN_TBMODIFICATION;
+			if (traceLifecycle) startupTrace("notification.begin", _pluginInfos[indexPluginInfo]->_moduleName.c_str());
 			_pluginInfos[indexPluginInfo]->_pBeNotified(&scNotif);
+			if (traceLifecycle) startupTrace("notification.end", _pluginInfos[indexPluginInfo]->_moduleName.c_str());
 		}
 		catch (std::exception& e)
 		{

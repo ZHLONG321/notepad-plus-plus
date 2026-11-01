@@ -24,12 +24,21 @@
 #include "documentMap.h"
 #include "Common.h"
 #include <stack>
+#include "StartupTrace.h"
 
 using namespace std;
 
 // Only for 2 main Scintilla editors
 BOOL Notepad_plus::notify(SCNotification *notification)
 {
+	static bool startupInputSeen = false;
+	if (notification->nmhdr.code == SCN_CHARADDED)
+	{
+		startupInputSeen = true;
+		startupTrace("editor.char_added");
+	}
+	if (startupInputSeen && notification->nmhdr.code == SCN_PAINTED)
+		startupTrace("editor.input_painted");
 	//Important, keep track of which element generated the message
 	bool isFromPrimary = (_mainEditView.getHSelf() == notification->nmhdr.hwndFrom || _mainDocTab.getHSelf() == notification->nmhdr.hwndFrom);
 	bool isFromSecondary = !isFromPrimary && (_subEditView.getHSelf() == notification->nmhdr.hwndFrom || _subDocTab.getHSelf() == notification->nmhdr.hwndFrom);
@@ -985,6 +994,12 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 
 		case SCN_PAINTED:
 		{
+			static bool firstPaint = true;
+			if (firstPaint && notifyView)
+			{
+				startupTrace("editor.first_painted");
+				firstPaint = false;
+			}
 			if (!notifyView)
 				return FALSE;
 

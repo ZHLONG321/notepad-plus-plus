@@ -34,6 +34,7 @@
 #define WINVER 0x0500
 #include <windows.h>
 #include <commctrl.h>
+#include "../../PowerEditor/src/StartupTrace.h"
 #include <richedit.h>
 #include <windowsx.h>
 #include <zmouse.h>
@@ -1623,9 +1624,13 @@ sptr_t ScintillaWin::FocusMessage(unsigned int iMessage, uptr_t wParam, sptr_t) 
 	}
 
 	case WM_SETFOCUS:
+		startupTrace("focus.message.enter");
 		SetFocusState(true);
+		startupTrace("focus.state.ready");
 		DestroySystemCaret();
+		startupTrace("focus.caret.destroyed");
 		CreateSystemCaret();
+		startupTrace("focus.caret.created");
 		break;
 	}
 	return 0;
