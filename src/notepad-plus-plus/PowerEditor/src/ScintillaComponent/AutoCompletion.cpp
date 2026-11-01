@@ -143,6 +143,11 @@ bool AutoCompletion::showApiAndWordComplete()
 
 	// Make Scintilla show the autocompletion menu
 
+	// An empty combined list would create and immediately destroy a popup
+	// on every typed character, just like a failed word-only completion.
+	if (wordArray.empty())
+		return false;
+
 	_pEditView->execute(SCI_AUTOCSETSEPARATOR, WPARAM(' '));
 	_pEditView->execute(SCI_AUTOCSETIGNORECASE, _ignoreCase);
 	_pEditView->showAutoComletion(curPos - startPos, words.c_str());
