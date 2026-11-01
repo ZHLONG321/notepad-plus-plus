@@ -18,7 +18,7 @@
 #include "documentSnapshot.h"
 #include "ScintillaEditView.h"
 
-INT_PTR CALLBACK DocumentPeeker::run_dlgProc(UINT message, WPARAM /*wParam*/, LPARAM /*lParam*/)
+INT_PTR CALLBACK DocumentPeeker::run_dlgProc(UINT message, WPARAM wParam, LPARAM /*lParam*/)
 {
 	switch (message)
 	{
@@ -36,6 +36,18 @@ INT_PTR CALLBACK DocumentPeeker::run_dlgProc(UINT message, WPARAM /*wParam*/, LP
 			_pPeekerView->display();
 		}
 		break;
+		case WM_CTLCOLORDLG:
+		{
+			if (_pPeekerView)
+			{
+				HDC dc = reinterpret_cast<HDC>(wParam);
+				COLORREF background = static_cast<COLORREF>(_pPeekerView->execute(SCI_STYLEGETBACK, STYLE_DEFAULT));
+				::SetBkColor(dc, background);
+				::SetDCBrushColor(dc, background);
+				return reinterpret_cast<INT_PTR>(::GetStockObject(DC_BRUSH));
+			}
+			break;
+		}
 	}
 	return FALSE;
 }
@@ -47,9 +59,19 @@ void DocumentPeeker::doDialog(POINT p, Buffer *pBuf, ScintillaEditView & scintSo
 		create(IDD_DOCUMENTSNAPSHOT);
 	}
 
+	// A visible preview is reused when hovering between tabs. Apply its new
+	// document, palette, wrapping and size together before presenting the result.
+	HWND editor = _pPeekerView ? _pPeekerView->getHSelf() : nullptr;
+	bool redraw = editor && (::GetWindowLongPtr(editor, GWL_STYLE) & WS_VISIBLE);
+	if (redraw)
+		::SendMessage(editor, WM_SETREDRAW, FALSE, 0);
 	syncDisplay(pBuf, scintSource);
+	if (redraw)
+		::SendMessage(editor, WM_SETREDRAW, TRUE, 0);
     // Adjust the position of DocumentPeeker
 	goTo(p);
+	::RedrawWindow(_hSelf, nullptr, nullptr,
+		RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
 }
 
 void DocumentPeeker::goTo(POINT p)
