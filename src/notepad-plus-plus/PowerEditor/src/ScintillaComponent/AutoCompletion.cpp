@@ -67,7 +67,7 @@ bool AutoCompletion::showApiComplete()
 
 bool AutoCompletion::showApiAndWordComplete()
 {
-    StartupTraceScope trace("autocomplete.apiAndWord");
+	StartupTraceScope trace(L"autocomplete.apiAndWord");
 
 	// Get beginning of word and complete word
 
@@ -152,7 +152,7 @@ bool AutoCompletion::showApiAndWordComplete()
 
 void AutoCompletion::getWordArray(vector<generic_string> & wordArray, TCHAR *beginChars, TCHAR *allChars)
 {
-    StartupTraceScope trace("autocomplete.documentWords");
+	StartupTraceScope trace(L"autocomplete.documentWords");
 	const size_t bufSize = 256;
 	const NppGUI & nppGUI = NppParameters::getInstance().getNppGUI();
 
@@ -758,7 +758,7 @@ void AutoCompletion::insertMatchedChars(int character, const MatchedPairConf & m
 
 void AutoCompletion::update(int character)
 {
-    StartupTraceScope trace("autocomplete.update");
+	StartupTraceScope trace(L"autocomplete.update");
 	if (!character)
 		return;
 
