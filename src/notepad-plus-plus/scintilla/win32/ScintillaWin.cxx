@@ -2207,6 +2207,7 @@ void ScintillaWin::UpdateSystemCaret() {
 }
 
 int ScintillaWin::SetScrollInfo(int nBar, LPCSCROLLINFO lpsi, BOOL bRedraw) noexcept {
+	StartupTraceScope trace(L"editor.setScrollInfo");
 	return ::SetScrollInfo(MainHWND(), nBar, lpsi, bRedraw);
 }
 
