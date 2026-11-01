@@ -34,6 +34,7 @@ void IconList::init(HINSTANCE hInst, int iconSize)
 
 void IconList::create(int iconSize, HINSTANCE hInst, int *iconIDArray, int iconIDArraySize)
 {
+	StartupTraceScope trace(L"icons.resourceList");
 	init(hInst, iconSize);
 	_pIconIDArray = iconIDArray;
 	_iconIDArraySize = iconIDArraySize;
