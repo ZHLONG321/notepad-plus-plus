@@ -33,7 +33,13 @@ inline void startupTrace(const char* event, const wchar_t* detail = L"")
     kt.LowPart = kernel.dwLowDateTime; kt.HighPart = kernel.dwHighDateTime;
     ut.LowPart = user.dwLowDateTime; ut.HighPart = user.dwHighDateTime;
     ULONG64 cycles = 0;
-    QueryThreadCycleTime(GetCurrentThread(), &cycles);
+    // Scintilla keeps older Windows header targets; resolve this diagnostic API
+    // without changing the target version of the editor or its plugins.
+    using QueryCycles = BOOL(WINAPI*)(HANDLE, PULONG64);
+    static auto queryCycles = reinterpret_cast<QueryCycles>(
+        GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "QueryThreadCycleTime"));
+    if (queryCycles)
+        queryCycles(GetCurrentThread(), &cycles);
     char line[1400] = {};
     int size = snprintf(line, sizeof(line), "%lld,%lld,%lu,%s,%s,%llu,%llu,%llu\n",
         counter.QuadPart, frequency.QuadPart, GetCurrentThreadId(), event, text, kt.QuadPart, ut.QuadPart, cycles);
