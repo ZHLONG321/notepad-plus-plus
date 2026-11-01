@@ -495,6 +495,11 @@ void FileManager::init(Notepad_plus * pNotepadPlus, ScintillaEditView * pscratch
 {
 	_pNotepadPlus = pNotepadPlus;
 	_pscratchTilla = pscratchTilla;
+	// This view only loads and saves documents; it is never displayed. Keep
+	// scrollbar visibility fixed instead of changing its frame for each file.
+	// These flags belong to the view, so displayed documents retain their bars.
+	_pscratchTilla->execute(SCI_SETHSCROLLBAR, false);
+	_pscratchTilla->execute(SCI_SETVSCROLLBAR, false);
 	_pscratchTilla->execute(SCI_SETUNDOCOLLECTION, false);	//dont store any undo information
 	_scratchDocDefault = (Document)_pscratchTilla->execute(SCI_GETDOCPOINTER);
 	_pscratchTilla->execute(SCI_ADDREFDOCUMENT, 0, _scratchDocDefault);
