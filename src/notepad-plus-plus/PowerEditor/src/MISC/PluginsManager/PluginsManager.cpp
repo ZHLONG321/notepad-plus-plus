@@ -693,8 +693,11 @@ void PluginsManager::notify(size_t indexPluginInfo, const SCNotification *notifi
 			const bool traceLifecycle = scNotif.nmhdr.code == NPPN_READY || scNotif.nmhdr.code == NPPN_TBMODIFICATION;
 			if (traceLifecycle) startupTrace("notification.begin", _pluginInfos[indexPluginInfo]->_moduleName.c_str());
 			const bool traceActivation = scNotif.nmhdr.code == NPPN_BUFFERACTIVATED;
+			const bool traceShutdown = scNotif.nmhdr.code == NPPN_BEFORESHUTDOWN || scNotif.nmhdr.code == NPPN_SHUTDOWN;
+			if (traceShutdown) startupTrace("shutdown.plugin.begin", _pluginInfos[indexPluginInfo]->_moduleName.c_str());
 			if (traceActivation) startupTrace("activation.plugin.begin", _pluginInfos[indexPluginInfo]->_moduleName.c_str());
 			_pluginInfos[indexPluginInfo]->_pBeNotified(&scNotif);
+			if (traceShutdown) startupTrace("shutdown.plugin.end", _pluginInfos[indexPluginInfo]->_moduleName.c_str());
 			if (traceActivation) startupTrace("activation.plugin.end", _pluginInfos[indexPluginInfo]->_moduleName.c_str());
 			if (notification->nmhdr.code == NPPN_FILEOPENED)
 				startupTrace("fileopened.delivered", _pluginInfos[indexPluginInfo]->_moduleName.c_str());

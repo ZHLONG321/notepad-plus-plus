@@ -1896,6 +1896,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 		case WM_QUERYENDSESSION:
 		case WM_CLOSE:
 		{
+			StartupTraceScope shutdownTrace(L"shutdown.request");
 			if (_pPublicInterface->isPrelaunch())
 			{
 				SendMessage(hwnd, WM_SYSCOMMAND, SC_MINIMIZE, 0);
@@ -1906,7 +1907,10 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 				scnN.nmhdr.code = NPPN_BEFORESHUTDOWN;
 				scnN.nmhdr.hwndFrom = hwnd;
 				scnN.nmhdr.idFrom = 0;
-				_pluginsManager.notify(&scnN);
+				{
+					StartupTraceScope trace(L"shutdown.beforeNotification");
+					_pluginsManager.notify(&scnN);
+				}
 
 				if (_pTrayIco)
 					_pTrayIco->doTrayIcon(REMOVE);
@@ -1930,7 +1934,9 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 					_lastRecentFileList.setLock(true);	//only lock when the session is remembered
 				}
 				_isAttemptingCloseOnQuit = true;
+				startupTrace("begin", L"shutdown.closeFiles");
 				bool allClosed = fileCloseAll(false, isSnapshotMode);	//try closing files before doing anything else
+				startupTrace("end", L"shutdown.closeFiles");
 				_isAttemptingCloseOnQuit = false;
 
 				if (nppgui._rememberLastSession)
@@ -1959,17 +1965,26 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 					_configStyleDlg.restoreGlobalOverrideValues();
 
 				scnN.nmhdr.code = NPPN_SHUTDOWN;
-				_pluginsManager.notify(&scnN);
+				{
+					StartupTraceScope trace(L"shutdown.notification");
+					_pluginsManager.notify(&scnN);
+				}
 
 
 				saveScintillasZoom(); 
-				saveGUIParams(); //writeGUIParams writeScintillaParams
+				{
+					StartupTraceScope trace(L"shutdown.saveGUI");
+					saveGUIParams(); //writeGUIParams writeScintillaParams
+				}
 				saveFindHistory(); //writeFindHistory
 				_lastRecentFileList.saveLRFL(); //writeRecentFileHistorySettings, writeHistory
 				//
 				// saving config.xml
 				//
-				nppParam.saveConfig_xml();
+				{
+					StartupTraceScope trace(L"shutdown.writeConfig");
+					nppParam.saveConfig_xml();
+				}
 
 				//
 				// saving userDefineLang.xml
@@ -2040,6 +2055,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case WM_DESTROY:
 		{
+			StartupTraceScope trace(L"shutdown.destroy");
 			killAllChildren();
 			::PostQuitMessage(0);
 			_pPublicInterface->gNppHWND = NULL;
