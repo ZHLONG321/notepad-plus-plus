@@ -19,6 +19,7 @@
 #include <shlwapi.h>
 #include "Notepad_plus_Window.h"
 #include "NppDarkMode.h"
+#include "StartupNoActivate.h"
 
 const TCHAR Notepad_plus_Window::_className[32] = TEXT("Notepad++");
 HWND Notepad_plus_Window::gNppHWND = NULL;
@@ -30,6 +31,7 @@ HWND Notepad_plus_Window::gNppHWND = NULL;
 void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLine, CmdLineParams *cmdLineParams)
 {
 	startupTrace("window.init.begin");
+	StartupNoActivate noActivate(cmdLineParams->_noActivate);
 	time_t timestampBegin = 0;
 	if (cmdLineParams->_showLoadingTime)
 		timestampBegin = time(NULL);
