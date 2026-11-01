@@ -1169,6 +1169,12 @@ void Notepad_plus::command(int id)
 
 		case IDM_SEARCH_FINDINCREMENT :
 		{
+			if (!_incrementFindDlg.isCreated())
+			{
+				_incrementFindDlg.init(_pPublicInterface->getHinst(), _pPublicInterface->getHSelf(),
+					&_findReplaceDlg, _nativeLangSpeaker.isRTL());
+				_incrementFindDlg.addToRebar(&_rebarBottom);
+			}
 			const int strSize = FINDREPLACE_MAXLENGTH;
 			TCHAR str[strSize];
 
