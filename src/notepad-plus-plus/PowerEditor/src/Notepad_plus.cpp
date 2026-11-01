@@ -4141,10 +4141,16 @@ bool Notepad_plus::removeBufferFromView(BufferID id, int whichOne)
 
 int Notepad_plus::switchEditViewTo(int gid)
 {
+	// Background document changes must not activate the editor. A click or key
+	// from this application already has a foreground window in this process.
+	DWORD foregroundProcess = 0;
+	::GetWindowThreadProcessId(::GetForegroundWindow(), &foregroundProcess);
+	const bool focusView = foregroundProcess == ::GetCurrentProcessId();
 	if (currentView() == gid)
 	{
 		//make sure focus is ok, then leave
-		_pEditView->getFocus();	//set the focus
+		if (focusView)
+			_pEditView->getFocus();
 		return gid;
 	}
 
@@ -4160,7 +4166,8 @@ int Notepad_plus::switchEditViewTo(int gid)
 	std::swap(_pEditView, _pNonEditView);
 
 	_pEditView->beSwitched();
-    _pEditView->getFocus();	//set the focus
+	if (focusView)
+		_pEditView->getFocus();
 
 	if (_pDocMap)
 	{
