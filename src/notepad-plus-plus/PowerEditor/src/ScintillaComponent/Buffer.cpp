@@ -1263,7 +1263,9 @@ LangType FileManager::detectLanguageFromTextBegining(const unsigned char *data, 
 bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data, Utf8_16_Read * unicodeConvertor, LoadedFileFormat& fileFormat)
 {
 	startupTrace("begin", L"file.read.decode");
+	startupTrace("begin", L"file.open");
 	FILE *fp = generic_fopen(filename, TEXT("rb"));
+	startupTrace("end", L"file.open");
 	if (!fp)
 	{
 		startupTrace("end", L"file.read.decode");
@@ -1292,6 +1294,7 @@ bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data,
 	}
 
 	//Setup scratchtilla for new filedata
+	startupTrace("begin", L"file.prepareDocument");
 	_pscratchTilla->execute(SCI_SETSTATUS, SC_STATUS_OK); // reset error status
 	_pscratchTilla->execute(SCI_SETDOCPOINTER, 0, doc);
 	bool ro = _pscratchTilla->execute(SCI_GETREADONLY) != 0;
@@ -1317,6 +1320,7 @@ bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data,
 
 	if (fileFormat._encoding != -1)
 		_pscratchTilla->execute(SCI_SETCODEPAGE, SC_CP_UTF8);
+	startupTrace("end", L"file.prepareDocument");
 
 	bool success = true;
 	EolType format = EolType::unknown;
@@ -1334,7 +1338,9 @@ bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data,
 
 		do
 		{
+			startupTrace("begin", L"file.readBlock");
 			lenFile = fread(data+incompleteMultibyteChar, 1, blockSize-incompleteMultibyteChar, fp) + incompleteMultibyteChar;
+			startupTrace("end", L"file.readBlock");
 			if (ferror(fp) != 0)
 			{
 				success = false;
@@ -1344,6 +1350,7 @@ bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data,
 
             if (isFirstTime)
             {
+				startupTrace("begin", L"file.detectEncoding");
 				// check if file contain any BOM
                 if (Utf8_16_Read::determineEncoding((unsigned char *)data, lenFile) != uni8Bit)
                 {
@@ -1357,6 +1364,7 @@ bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data,
 						fileFormat._encoding = detectCodepage(data, lenFile);
                 }
 
+				startupTrace("end", L"file.detectEncoding");
 				if (fileFormat._language == L_TEXT)
 				{
 					// check the language du fichier
@@ -1366,6 +1374,7 @@ bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data,
                 isFirstTime = false;
             }
 
+			startupTrace("begin", L"file.convertAppend");
 			if (fileFormat._encoding != -1)
 			{
 				if (fileFormat._encoding == SC_CP_UTF8)
@@ -1392,6 +1401,7 @@ bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data,
 					format = getEOLFormatForm(unicodeConvertor->getNewBuf(), unicodeConvertor->getNewSize(), EolType::unknown);
 			}
 
+			startupTrace("end", L"file.convertAppend");
 			if (_pscratchTilla->execute(SCI_GETSTATUS) != SC_STATUS_OK)
 				throw;
 
@@ -1436,6 +1446,7 @@ bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data,
 		fileFormat._eolFormat = format;
 	}
 
+	startupTrace("begin", L"file.finishDocument");
 	_pscratchTilla->execute(SCI_EMPTYUNDOBUFFER);
 	_pscratchTilla->execute(SCI_SETSAVEPOINT);
 
@@ -1443,6 +1454,7 @@ bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data,
 		_pscratchTilla->execute(SCI_SETREADONLY, true);
 
 	_pscratchTilla->execute(SCI_SETDOCPOINTER, 0, _scratchDocDefault);
+	startupTrace("end", L"file.finishDocument");
 
 	startupTrace("end", L"file.read.decode");
 	return success;

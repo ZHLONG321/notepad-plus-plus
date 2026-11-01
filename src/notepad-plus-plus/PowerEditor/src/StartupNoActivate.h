@@ -4,6 +4,7 @@
 #pragma once
 #include <windows.h>
 #include <commctrl.h>
+#include "StartupTrace.h"
 
 class StartupNoActivate final
 {
@@ -43,10 +44,23 @@ private:
 	static BOOL CALLBACK updateSubclass(HWND hwnd, LPARAM enabled)
 	{
 		if (enabled)
-			::SetWindowSubclass(hwnd, positionProc, 0x4e505042, 0);
+		{
+			BOOL installed = ::SetWindowSubclass(hwnd, positionProc, 0x4e505042, 0);
+			tracePosition(hwnd, WM_NCCREATE, installed, nullptr);
+		}
 		else
 			::RemoveWindowSubclass(hwnd, positionProc, 0x4e505042);
 		return TRUE;
+	}
+	static void tracePosition(HWND hwnd, UINT message, UINT_PTR value, const WINDOWPOS* position)
+	{
+		if (startupTraceHandle() == INVALID_HANDLE_VALUE)
+			return;
+		wchar_t detail[160];
+		swprintf_s(detail, L"hwnd=%p msg=%x value=%llx after=%p flags=%x", hwnd, message,
+			static_cast<unsigned long long>(value), position ? position->hwndInsertAfter : nullptr,
+			position ? position->flags : 0);
+		startupTrace("background.order", detail);
 	}
 	static LRESULT CALLBACK positionProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam,
 		UINT_PTR subclass, DWORD_PTR)
@@ -54,6 +68,8 @@ private:
 		if (message == WM_NCDESTROY)
 			::RemoveWindowSubclass(hwnd, positionProc, subclass);
 		LRESULT result = ::DefSubclassProc(hwnd, message, wParam, lParam);
+		if (message == WM_WINDOWPOSCHANGING || message == WM_WINDOWPOSCHANGED)
+			tracePosition(hwnd, message, depth(), reinterpret_cast<WINDOWPOS*>(lParam));
 		if (message == WM_WINDOWPOSCHANGING && depth())
 		{
 			auto position = reinterpret_cast<WINDOWPOS*>(lParam);
@@ -70,6 +86,12 @@ private:
 		if (code == HC_ACTION)
 		{
 			auto message = reinterpret_cast<CWPRETSTRUCT*>(lParam);
+			if (message->message == WM_INITDIALOG || message->message == WM_SHOWWINDOW)
+			{
+				DWORD_PTR installed = 0;
+				tracePosition(message->hwnd, message->message,
+					::GetWindowSubclass(message->hwnd, positionProc, 0x4e505042, &installed), nullptr);
+			}
 			// Install after successful non-client creation, before any show call.
 			if (message->message == WM_NCCREATE && message->lResult &&
 				!(::GetWindowLongPtr(message->hwnd, GWL_STYLE) & WS_CHILD))
