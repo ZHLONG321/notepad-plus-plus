@@ -390,12 +390,10 @@ bool PluginsManager::loadPluginsV2(const TCHAR* dir)
 	{
 		const TCHAR* module = ::PathFindFileName(path.c_str());
 		TCHAR mode[16] = {};
-		::GetPrivateProfileString(TEXT("Plugins"), module, TEXT("normal"), mode, 16, startupFile.c_str());
+		// Unconfigured plugins load after the first editor paint. Keep normal
+		// available for an explicit choice or a reproduced delayed-load crash.
+		::GetPrivateProfileString(TEXT("Plugins"), module, TEXT("delayed"), mode, 16, startupFile.c_str());
 		bool delayed = generic_stricmp(mode, TEXT("delayed")) == 0;
-		// Visible saved panels must participate in the original restoration path.
-		for (const auto& panel : nppParams.getNppGUI()._dockingData._pluginDockInfo)
-			if (panel._isVisible && generic_stricmp(panel._name.c_str(), module) == 0)
-				delayed = false;
 		if (delayed)
 		{
 			_delayedPlugins.push_back(path);
