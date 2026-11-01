@@ -2071,13 +2071,16 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 
 			//Force in the document so we can add the markers
 			//Don't use default methods because of performance
-			Document prevDoc = _mainEditView.execute(SCI_GETDOCPOINTER);
-			_mainEditView.execute(SCI_SETDOCPOINTER, 0, buf->getDocument());
-			for (size_t j = 0, len = session._mainViewFiles[i]._marks.size(); j < len ; ++j)
+			if (!session._mainViewFiles[i]._marks.empty())
 			{
-				_mainEditView.execute(SCI_MARKERADD, session._mainViewFiles[i]._marks[j], MARK_BOOKMARK);
+				Document prevDoc = _mainEditView.execute(SCI_GETDOCPOINTER);
+				_mainEditView.execute(SCI_SETDOCPOINTER, 0, buf->getDocument());
+				for (size_t j = 0, len = session._mainViewFiles[i]._marks.size(); j < len ; ++j)
+				{
+					_mainEditView.execute(SCI_MARKERADD, session._mainViewFiles[i]._marks[j], MARK_BOOKMARK);
+				}
+				_mainEditView.execute(SCI_SETDOCPOINTER, 0, prevDoc);
 			}
-			_mainEditView.execute(SCI_SETDOCPOINTER, 0, prevDoc);
 			startupTrace("session.main.file.restored");
 			++i;
 		}
@@ -2189,13 +2192,16 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 
 			//Force in the document so we can add the markers
 			//Don't use default methods because of performance
-			Document prevDoc = _subEditView.execute(SCI_GETDOCPOINTER);
-			_subEditView.execute(SCI_SETDOCPOINTER, 0, buf->getDocument());
-			for (size_t j = 0, len = session._subViewFiles[k]._marks.size(); j < len ; ++j)
+			if (!session._subViewFiles[k]._marks.empty())
 			{
-				_subEditView.execute(SCI_MARKERADD, session._subViewFiles[k]._marks[j], MARK_BOOKMARK);
+				Document prevDoc = _subEditView.execute(SCI_GETDOCPOINTER);
+				_subEditView.execute(SCI_SETDOCPOINTER, 0, buf->getDocument());
+				for (size_t j = 0, len = session._subViewFiles[k]._marks.size(); j < len ; ++j)
+				{
+					_subEditView.execute(SCI_MARKERADD, session._subViewFiles[k]._marks[j], MARK_BOOKMARK);
+				}
+				_subEditView.execute(SCI_SETDOCPOINTER, 0, prevDoc);
 			}
-			_subEditView.execute(SCI_SETDOCPOINTER, 0, prevDoc);
 
 			++k;
 		}
