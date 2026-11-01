@@ -258,8 +258,10 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 			DWMWA_CLOAK, &cloak, sizeof(cloak)));
 		if (cmdLineParams->_noActivate)
 		{
+			startupTrace("begin", L"window.showWithoutActivation");
 			::SetWindowPos(_hSelf, HWND_BOTTOM, 0, 0, 0, 0,
 				SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+			startupTrace("end", L"window.showWithoutActivation");
 			// Show-only SetWindowPos need not send WM_SIZE. Child layout uses
 			// effective visibility, so run it after showing and before painting.
 			::SendMessage(_hSelf, WM_SIZE, SIZE_RESTORED, 0);
@@ -270,13 +272,19 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 			::ShowWindow(_hSelf, nppGUI._isMaximized ? SW_MAXIMIZE : SW_SHOW);
 		// Paint the themed client and children before READY handlers can block
 		// the UI thread. Otherwise DWM can expose their unpainted white surfaces.
+		startupTrace("begin", L"window.initialRedraw");
 		::RedrawWindow(_hSelf, nullptr, nullptr,
 			RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+		startupTrace("end", L"window.initialRedraw");
 		if (startupCloaked)
 		{
+			startupTrace("begin", L"window.flushGDI");
 			::GdiFlush();
+			startupTrace("end", L"window.flushGDI");
 			cloak = FALSE;
+			startupTrace("begin", L"window.uncloak");
 			setAttribute(_hSelf, DWMWA_CLOAK, &cloak, sizeof(cloak));
+			startupTrace("end", L"window.uncloak");
 			startupTrace("window.surface.uncloaked");
 		}
 		if (transitionDisabled)

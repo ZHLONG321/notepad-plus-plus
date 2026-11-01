@@ -844,6 +844,7 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 
 		case SCN_UPDATEUI:
 		{
+			StartupTraceScope updateTrace(L"editor.updateUI");
 			if (!notifyView)
 				return FALSE;
 
@@ -853,6 +854,7 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 			// replacement for obsolete custom SCN_SCROLLED
 			if (notification->updated & SC_UPDATE_V_SCROLL)
 			{
+				StartupTraceScope trace(L"editor.linkHotspots");
 				addHotSpot(notifyView);
 			}
 
@@ -872,16 +874,21 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 				break;
 			}
 
-			braceMatch();
+			{
+				StartupTraceScope trace(L"editor.braceMatch");
+				braceMatch();
+			}
 
 			if (nppGui._enableTagsMatchHilite)
 			{
+				StartupTraceScope trace(L"editor.tagMatch");
 				XmlMatchedTagsHighlighter xmlTagMatchHiliter(_pEditView);
 				xmlTagMatchHiliter.tagMatch(nppGui._enableTagAttrsHilite);
 			}
 
 			if (nppGui._enableSmartHilite)
 			{
+				StartupTraceScope trace(L"editor.smartHighlight");
 				if (nppGui._disableSmartHiliteTmp)
 					nppGui._disableSmartHiliteTmp = false;
 				else
@@ -896,6 +903,7 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 			bool contentIsChanged = (notification->updated & SC_UPDATE_CONTENT) != 0;
 			if (selectionIsChanged || contentIsChanged)
 			{
+				StartupTraceScope trace(L"editor.statusBar");
 				updateStatusBar();
 			}
 
