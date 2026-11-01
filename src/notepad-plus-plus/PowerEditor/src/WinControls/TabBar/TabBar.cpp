@@ -873,6 +873,8 @@ LRESULT TabBarPlus::runProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPara
 			{
 				break;
 			}
+			if (::GetWindowLongPtr(hwnd, GWL_STYLE) & TCS_OWNERDRAWFIXED)
+				return 1; // The buffered WM_PAINT draws the complete background.
 
 			RECT rc = { 0 };
 			GetClientRect(hwnd, &rc);
@@ -895,7 +897,9 @@ LRESULT TabBarPlus::runProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPara
 			}
 
 			PAINTSTRUCT ps;
-			HDC hdc = BeginPaint(hwnd, &ps);
+			HDC target = BeginPaint(hwnd, &ps);
+			NppDarkMode::BufferedPaint paint(target, ps.rcPaint);
+			HDC hdc = paint.getDC();
 			FillRect(hdc, &ps.rcPaint, NppDarkMode::getDarkerBackgroundBrush());
 
 			UINT id = ::GetDlgCtrlID(hwnd);
@@ -981,6 +985,7 @@ LRESULT TabBarPlus::runProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lPara
 
 			SelectObject(hdc, holdPen);
 
+			paint.finish();
 			EndPaint(hwnd, &ps);
 			return 0;
 		}

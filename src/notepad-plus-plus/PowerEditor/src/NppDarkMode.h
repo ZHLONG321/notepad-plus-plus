@@ -29,6 +29,21 @@ constexpr COLORREF HEXRGB(DWORD rrggbb) {
 
 namespace NppDarkMode
 {
+	// Keep background erasure and foreground drawing in one visible update.
+	class BufferedPaint
+	{
+	public:
+		BufferedPaint(HDC target, const RECT& rect);
+		~BufferedPaint();
+		BufferedPaint(const BufferedPaint&) = delete;
+		BufferedPaint& operator=(const BufferedPaint&) = delete;
+		HDC getDC() const { return _dc; }
+		void finish();
+	private:
+		HANDLE _buffer = nullptr;
+		HDC _dc = nullptr;
+	};
+
 	struct Colors
 	{
 		COLORREF background = 0;

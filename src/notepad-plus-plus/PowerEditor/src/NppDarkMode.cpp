@@ -36,6 +36,34 @@
 
 namespace NppDarkMode
 {
+	BufferedPaint::BufferedPaint(HDC target, const RECT& rect) : _dc(target)
+	{
+		struct ThreadPaint
+		{
+			HRESULT initialized = ::BufferedPaintInit();
+			~ThreadPaint() { if (SUCCEEDED(initialized)) ::BufferedPaintUnInit(); }
+		};
+		static thread_local ThreadPaint threadPaint;
+		if (SUCCEEDED(threadPaint.initialized) && !::IsRectEmpty(&rect))
+		{
+			HDC bufferDC = nullptr;
+			_buffer = ::BeginBufferedPaint(target, &rect, BPBF_COMPATIBLEBITMAP, nullptr, &bufferDC);
+			if (_buffer)
+				_dc = bufferDC;
+		}
+	}
+
+	BufferedPaint::~BufferedPaint() { finish(); }
+
+	void BufferedPaint::finish()
+	{
+		if (_buffer)
+		{
+			::EndBufferedPaint(_buffer, TRUE);
+			_buffer = nullptr;
+		}
+	}
+
 	struct Brushes
 	{
 		HBRUSH background = nullptr;
@@ -1187,6 +1215,13 @@ namespace NppDarkMode
 
 		switch (uMsg)
 		{
+		case WM_ERASEBKGND:
+		{
+			const LONG_PTR style = ::GetWindowLongPtr(hWnd, GWL_STYLE);
+			if (NppDarkMode::isEnabled() && !(style & (TCS_BOTTOM | TCS_BUTTONS | TCS_VERTICAL)))
+				return 1; // WM_PAINT owns the background and the tab contents.
+			break;
+		}
 		case WM_PAINT:
 		{
 			if (!NppDarkMode::isEnabled())
@@ -1201,7 +1236,9 @@ namespace NppDarkMode
 			}
 
 			PAINTSTRUCT ps;
-			HDC hdc = ::BeginPaint(hWnd, &ps);
+			HDC target = ::BeginPaint(hWnd, &ps);
+			BufferedPaint paint(target, ps.rcPaint);
+			HDC hdc = paint.getDC();
 			::FillRect(hdc, &ps.rcPaint, NppDarkMode::getDarkerBackgroundBrush());
 
 			auto holdPen = static_cast<HPEN>(::SelectObject(hdc, NppDarkMode::getEdgePen()));
@@ -1290,6 +1327,7 @@ namespace NppDarkMode
 
 			SelectObject(hdc, holdPen);
 
+			paint.finish();
 			EndPaint(hWnd, &ps);
 			return 0;
 		}
