@@ -1891,6 +1891,7 @@ void ScintillaEditView::saveCurrentPos()
 // so post step function will be cakked in the next SCN_PAINTED message
 void ScintillaEditView::restoreCurrentPosPreStep()
 {
+	StartupTraceScope trace(L"editor.restorePosition");
 	Buffer * buf = MainFileManager.getBufferByID(_currentBufferID);
 	Position & pos = buf->getPosition(this);
 
@@ -1903,9 +1904,13 @@ void ScintillaEditView::restoreCurrentPosPreStep()
 		execute(SCI_SETSCROLLWIDTH, pos._scrollWidth);
 		execute(SCI_SETXOFFSET, pos._xOffset);
 	}
+	startupTrace("begin", L"editor.chooseCaretX");
 	execute(SCI_CHOOSECARETX); // choose current x position
+	startupTrace("end", L"editor.chooseCaretX");
+	startupTrace("begin", L"editor.restoreTopLine");
 	int lineToShow = static_cast<int32_t>(execute(SCI_VISIBLEFROMDOCLINE, pos._firstVisibleLine));
 	execute(SCI_SETFIRSTVISIBLELINE, lineToShow);
+	startupTrace("end", L"editor.restoreTopLine");
 	if (isWrap())
 	{
 		// Enable flag 'positionRestoreNeeded' so that function restoreCurrentPosPostStep get called
@@ -2030,8 +2035,10 @@ void ScintillaEditView::activateBuffer(BufferID buffer)
 	bufferUpdated(_currentBuffer, (BufferChangeMask & ~BufferChangeLanguage));
 
 	// restore the collapsed info
+	startupTrace("begin", L"editor.restoreFolds");
 	const std::vector<size_t> & lineStateVectorNew = newBuf->getHeaderLineState(this);
 	syncFoldStateWith(lineStateVectorNew);
+	startupTrace("end", L"editor.restoreFolds");
 
 	restoreCurrentPosPreStep();
 
