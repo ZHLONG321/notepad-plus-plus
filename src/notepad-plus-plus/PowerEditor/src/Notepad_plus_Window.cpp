@@ -237,6 +237,10 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 			::ShowWindow(_hSelf, SW_SHOW);
 		else
 			::ShowWindow(_hSelf, nppGUI._isMaximized ? SW_MAXIMIZE : SW_SHOW);
+		// Paint the themed client and children before READY handlers can block
+		// the UI thread. Otherwise DWM can expose their unpainted white surfaces.
+		::RedrawWindow(_hSelf, nullptr, nullptr,
+			RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
 	}
 	else
 	{
