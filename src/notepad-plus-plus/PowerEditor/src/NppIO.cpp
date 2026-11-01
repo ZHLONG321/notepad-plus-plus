@@ -28,6 +28,7 @@
 #include "fileBrowser.h"
 #include <tchar.h>
 #include <unordered_set>
+#include "StartupTrace.h"
 
 using namespace std;
 
@@ -1980,6 +1981,7 @@ void Notepad_plus::loadLastSession()
 
 bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shouldLoadFileBrowser)
 {
+	startupTrace("session.restore.begin");
 	NppParameters& nppParam = NppParameters::getInstance();
 	bool allSessionFilesLoaded = true;
 	BufferID lastOpened = BUFFER_INVALID;
@@ -1991,6 +1993,7 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 
 	for (size_t i = 0; i < session.nbMainFiles() ; )
 	{
+		startupTrace("session.main.file.begin");
 		const TCHAR *pFn = session._mainViewFiles[i]._fileName.c_str();
 
 		if (isFileSession(pFn) || isFileWorkspace(pFn))
@@ -2029,6 +2032,7 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 
 		if (lastOpened != BUFFER_INVALID)
 		{
+			startupTrace("session.main.file.opened");
 			showView(MAIN_VIEW);
 			const TCHAR *pLn = session._mainViewFiles[i]._langName.c_str();
 			int id = getLangFromMenuName(pLn);
@@ -2070,6 +2074,7 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 				_mainEditView.execute(SCI_MARKERADD, session._mainViewFiles[i]._marks[j], MARK_BOOKMARK);
 			}
 			_mainEditView.execute(SCI_SETDOCPOINTER, 0, prevDoc);
+			startupTrace("session.main.file.restored");
 			++i;
 		}
 		else
@@ -2232,6 +2237,7 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 		launchFileBrowser(session._fileBrowserRoots, session._fileBrowserSelectedItem, true);
 	}
 
+	startupTrace("session.restore.end");
 	return allSessionFilesLoaded;
 }
 
