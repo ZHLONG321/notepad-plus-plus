@@ -711,6 +711,7 @@ LRESULT Notepad_plus::init(HWND hwnd)
 
 	DockingManagerData& dmd = nppGUI._dockingData;
 	startupTrace("core.docking.begin");
+	startupTrace(nppGUI._isCmdlineNosessionActivated ? "core.docking.noSession" : "core.docking.restoreSession");
 
 	_dockingManager.setDockedContSize(CONT_LEFT, nppGUI._dockingData._leftWidth);
 	_dockingManager.setDockedContSize(CONT_RIGHT, nppGUI._dockingData._rightWidth);
@@ -724,6 +725,7 @@ LRESULT Notepad_plus::init(HWND hwnd)
 			PluginDlgDockingInfo& pdi = dmd._pluginDockInfo[i];
 			if (pdi._isVisible)
 			{
+				startupTrace("core.docking.request", pdi._name.c_str());
 				if (pdi._name == NPP_INTERNAL_FUCTION_STR)
 					_internalFuncIDs.push_back(pdi._internalID);
 				else

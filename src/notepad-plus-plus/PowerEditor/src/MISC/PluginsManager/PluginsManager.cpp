@@ -625,6 +625,7 @@ void PluginsManager::runPluginCommand(const TCHAR *pluginName, int commandID)
 			const auto request = std::make_pair(generic_string(pluginName), commandID);
 			if (std::find(_delayedStartupCommands.begin(), _delayedStartupCommands.end(), request) == _delayedStartupCommands.end())
 				_delayedStartupCommands.push_back(request);
+			startupTrace("plugin.savedCommand.queued", pluginName);
 			return;
 		}
 	}
@@ -634,6 +635,7 @@ void PluginsManager::runPluginCommand(const TCHAR *pluginName, int commandID)
 		{
 			if (_pluginsCommands[i]._funcID == commandID)
 			{
+				startupTrace("plugin.savedCommand.invoke", pluginName);
 				try
 				{
 					_pluginsCommands[i]._pFunc();
