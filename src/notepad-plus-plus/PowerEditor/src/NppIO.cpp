@@ -123,6 +123,7 @@ DWORD WINAPI Notepad_plus::monitorFileOnChange(void * params)
 
 void resolveLinkFile(generic_string& linkFilePath)
 {
+	StartupTraceScope trace(L"file.resolveLink");
 	IShellLink* psl;
 	WCHAR targetFilePath[MAX_PATH];
 	WIN32_FIND_DATA wfd;
