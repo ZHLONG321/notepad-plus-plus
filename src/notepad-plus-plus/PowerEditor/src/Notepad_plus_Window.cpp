@@ -250,6 +250,12 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		BOOL disableTransition = TRUE;
 		bool transitionDisabled = setAttribute && SUCCEEDED(setAttribute(_hSelf,
 			DWMWA_TRANSITIONS_FORCEDISABLED, &disableTransition, sizeof(disableTransition)));
+		// Keep the initial surface composed but off screen while visible child
+		// layout and painting run. Otherwise DWM may publish a partial redraw
+		// between two child windows even though RedrawWindow is synchronous.
+		BOOL cloak = TRUE;
+		bool startupCloaked = setAttribute && SUCCEEDED(setAttribute(_hSelf,
+			DWMWA_CLOAK, &cloak, sizeof(cloak)));
 		if (cmdLineParams->_noActivate)
 		{
 			::SetWindowPos(_hSelf, HWND_BOTTOM, 0, 0, 0, 0,
@@ -266,6 +272,13 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		// the UI thread. Otherwise DWM can expose their unpainted white surfaces.
 		::RedrawWindow(_hSelf, nullptr, nullptr,
 			RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+		if (startupCloaked)
+		{
+			::GdiFlush();
+			cloak = FALSE;
+			setAttribute(_hSelf, DWMWA_CLOAK, &cloak, sizeof(cloak));
+			startupTrace("window.surface.uncloaked");
+		}
 		if (transitionDisabled)
 		{
 			auto flush = reinterpret_cast<FlushComposition>(::GetProcAddress(dwm, "DwmFlush"));
