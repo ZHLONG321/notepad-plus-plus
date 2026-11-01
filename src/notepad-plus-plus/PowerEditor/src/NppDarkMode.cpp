@@ -1583,7 +1583,6 @@ namespace NppDarkMode
 	}
 
 	constexpr UINT_PTR g_tooltipThemeSubclassID = 42;
-	constexpr UINT_PTR g_tooltipOwnerSubclassID = 42;
 
 	LRESULT CALLBACK TooltipThemeSubclass(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam,
 		UINT_PTR subclassID, DWORD_PTR)
@@ -1602,45 +1601,6 @@ namespace NppDarkMode
 			RemoveWindowSubclass(hwnd, TooltipThemeSubclass, subclassID);
 			StartupTraceScope trace(L"tooltip.firstTheme");
 			NppDarkMode::setDarkExplorerTheme(hwnd);
-		}
-		return DefSubclassProc(hwnd, message, wParam, lParam);
-	}
-
-	void prepareTooltipTheme(HWND hTips)
-	{
-		if (hTips == nullptr)
-			return;
-		if (!::IsWindowVisible(hTips) &&
-			SetWindowSubclass(hTips, TooltipThemeSubclass, g_tooltipThemeSubclassID, 0))
-		{
-			startupTrace("tooltip.theme.pending");
-			return;
-		}
-		RemoveWindowSubclass(hTips, TooltipThemeSubclass, g_tooltipThemeSubclassID);
-		NppDarkMode::setDarkExplorerTheme(hTips);
-	}
-
-	LRESULT CALLBACK TooltipOwnerSubclass(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam,
-		UINT_PTR subclassID, DWORD_PTR getTooltipMessage)
-	{
-		if (message == WM_NCDESTROY)
-			RemoveWindowSubclass(hwnd, TooltipOwnerSubclass, subclassID);
-		else if (message == getTooltipMessage)
-		{
-			RemoveWindowSubclass(hwnd, TooltipOwnerSubclass, subclassID);
-			auto result = DefSubclassProc(hwnd, message, wParam, lParam);
-			prepareTooltipTheme(reinterpret_cast<HWND>(result));
-			return result;
-		}
-		else if (message == WM_MOUSEMOVE || message == WM_MOUSEHOVER || message == WM_TIMER)
-		{
-			// Querying a hidden control can itself create its native tooltip.
-			// Wait for interaction, but prepare it before the control handles it.
-			RemoveWindowSubclass(hwnd, TooltipOwnerSubclass, subclassID);
-			StartupTraceScope trace(L"tooltip.firstWindow");
-			auto hTips = reinterpret_cast<HWND>(::SendMessage(hwnd,
-				static_cast<UINT>(getTooltipMessage), 0, 0));
-			prepareTooltipTheme(hTips);
 		}
 		return DefSubclassProc(hwnd, message, wParam, lParam);
 	}
@@ -1670,17 +1630,27 @@ namespace NppDarkMode
 		auto hTips = hwnd;
 		if (msg)
 		{
-			if (!::IsWindowVisible(hwnd) &&
-				SetWindowSubclass(hwnd, TooltipOwnerSubclass, g_tooltipOwnerSubclassID, msg))
-			{
-				startupTrace("tooltip.window.pending");
-				return;
-			}
-			RemoveWindowSubclass(hwnd, TooltipOwnerSubclass, g_tooltipOwnerSubclassID);
 			StartupTraceScope trace(L"tooltip.getWindow");
 			hTips = reinterpret_cast<HWND>(::SendMessage(hwnd, msg, 0, 0));
 		}
-		prepareTooltipTheme(hTips);
+		if (hTips == nullptr)
+			return;
+
+		// A hidden tooltip needs no theme resources until its first interaction.
+		// The subclass also covers direct display and rendering, before any paint.
+		BOOL subclassed = FALSE;
+		if (!::IsWindowVisible(hTips))
+		{
+			StartupTraceScope trace(L"tooltip.subclass");
+			subclassed = SetWindowSubclass(hTips, TooltipThemeSubclass, g_tooltipThemeSubclassID, 0);
+		}
+		if (subclassed)
+		{
+			startupTrace("tooltip.theme.pending");
+			return;
+		}
+		RemoveWindowSubclass(hTips, TooltipThemeSubclass, g_tooltipThemeSubclassID);
+		NppDarkMode::setDarkExplorerTheme(hTips);
 	}
 
 	void setDarkLineAbovePanelToolbar(HWND hwnd)
