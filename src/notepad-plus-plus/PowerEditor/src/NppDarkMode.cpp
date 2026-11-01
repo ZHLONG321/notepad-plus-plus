@@ -1187,18 +1187,6 @@ namespace NppDarkMode
 
 		switch (uMsg)
 		{
-		case WM_ERASEBKGND:
-		{
-			LONG_PTR style = GetWindowLongPtr(hWnd, GWL_STYLE);
-			if (NppDarkMode::isEnabled() && !(style & (TCS_BOTTOM | TCS_BUTTONS | TCS_VERTICAL)))
-			{
-				RECT rc;
-				::GetClientRect(hWnd, &rc);
-				::FillRect(reinterpret_cast<HDC>(wParam), &rc, NppDarkMode::getDarkerBackgroundBrush());
-				return TRUE;
-			}
-			break;
-		}
 		case WM_PAINT:
 		{
 			if (!NppDarkMode::isEnabled())
@@ -1330,19 +1318,6 @@ namespace NppDarkMode
 	{
 		switch (uMsg)
 		{
-			case WM_ERASEBKGND:
-			{
-				if (NppDarkMode::isEnabled())
-				{
-					RECT rc;
-					::GetClientRect(hWnd, &rc);
-					bool listOnly = (::GetWindowLongPtr(hWnd, GWL_STYLE) & CBS_DROPDOWNLIST) == CBS_DROPDOWNLIST;
-					::FillRect(reinterpret_cast<HDC>(wParam), &rc, listOnly ?
-						NppDarkMode::getBackgroundBrush() : NppDarkMode::getSofterBackgroundBrush());
-					return TRUE;
-				}
-				break;
-			}
 			case WM_PAINT:
 			{
 				if (!NppDarkMode::isEnabled())
