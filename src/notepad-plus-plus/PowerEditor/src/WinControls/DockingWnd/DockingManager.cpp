@@ -515,7 +515,7 @@ void DockingManager::reSizeTo(RECT & rc)
 					   rcBottom.top   ,
 					   rcBottom.right ,
 					   rcBottom.bottom,
-					   SWP_NOZORDER);
+					   SWP_NOZORDER | SWP_NOACTIVATE);
 		_vSplitter[CONT_BOTTOM]->display();
 	}
 
@@ -526,7 +526,7 @@ void DockingManager::reSizeTo(RECT & rc)
 					   _dockData.rcRegion[CONT_TOP].top   ,
 					   _dockData.rcRegion[CONT_TOP].right ,
 					   _dockData.rcRegion[CONT_TOP].bottom,
-					   SWP_NOZORDER);
+					   SWP_NOZORDER | SWP_NOACTIVATE);
 		_vSplitter[CONT_TOP]->display();
 	}
 
@@ -537,7 +537,7 @@ void DockingManager::reSizeTo(RECT & rc)
 					   rcRight.top   ,
 					   rcRight.right ,
 					   rcRight.bottom,
-					   SWP_NOZORDER);
+					   SWP_NOZORDER | SWP_NOACTIVATE);
 		_vSplitter[CONT_RIGHT]->display();
 	}
 
@@ -548,7 +548,7 @@ void DockingManager::reSizeTo(RECT & rc)
 					   _dockData.rcRegion[CONT_LEFT].top   ,
 					   _dockData.rcRegion[CONT_LEFT].right ,
 					   _dockData.rcRegion[CONT_LEFT].bottom,
-					   SWP_NOZORDER);
+					   SWP_NOZORDER | SWP_NOACTIVATE);
 		_vSplitter[CONT_LEFT]->display();
 	}
 	(*_ppMainWindow)->reSizeTo(_rcWork);

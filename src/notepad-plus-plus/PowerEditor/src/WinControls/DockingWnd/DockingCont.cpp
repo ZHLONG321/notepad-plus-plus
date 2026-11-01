@@ -1270,7 +1270,7 @@ void DockingCont::onSize()
 
 				::SetWindowPos(_hContTab, NULL,
 								rcTemp.left, rcTemp.top, rcTemp.right, rcTemp.bottom, 
-								SWP_NOZORDER | SWP_SHOWWINDOW);
+								SWP_NOZORDER | SWP_SHOWWINDOW | SWP_NOACTIVATE);
 			}
 
 			// resize client area for plugin
@@ -1296,7 +1296,7 @@ void DockingCont::onSize()
 
 			::SetWindowPos(((tTbData*)tcItem.lParam)->hClient, NULL,
 							0, 0, rcTemp.right, rcTemp.bottom, 
-							SWP_NOZORDER);
+							SWP_NOZORDER | SWP_NOACTIVATE);
 
 			// Notify switch in
 			NMHDR nmhdr;
