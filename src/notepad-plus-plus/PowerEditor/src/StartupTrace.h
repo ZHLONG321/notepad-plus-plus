@@ -32,9 +32,11 @@ inline void startupTrace(const char* event, const wchar_t* detail = L"")
     ULARGE_INTEGER kt, ut;
     kt.LowPart = kernel.dwLowDateTime; kt.HighPart = kernel.dwHighDateTime;
     ut.LowPart = user.dwLowDateTime; ut.HighPart = user.dwHighDateTime;
+    ULONG64 cycles = 0;
+    QueryThreadCycleTime(GetCurrentThread(), &cycles);
     char line[1400] = {};
-    int size = snprintf(line, sizeof(line), "%lld,%lld,%lu,%s,%s,%llu,%llu\n",
-        counter.QuadPart, frequency.QuadPart, GetCurrentThreadId(), event, text, kt.QuadPart, ut.QuadPart);
+    int size = snprintf(line, sizeof(line), "%lld,%lld,%lu,%s,%s,%llu,%llu,%llu\n",
+        counter.QuadPart, frequency.QuadPart, GetCurrentThreadId(), event, text, kt.QuadPart, ut.QuadPart, cycles);
     if (size > 0 && size < static_cast<int>(sizeof(line)))
     {
         DWORD written;
