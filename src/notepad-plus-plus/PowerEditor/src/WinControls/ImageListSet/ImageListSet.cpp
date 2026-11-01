@@ -45,11 +45,15 @@ void IconList::create(int iconSize, HINSTANCE hInst, int *iconIDArray, int iconI
 
 void IconList::addIcon(int iconID) const 
 {
+	startupTrace("begin", L"icons.loadResource");
 	HICON hIcon = ::LoadIcon(_hInst, MAKEINTRESOURCE(iconID));
+	startupTrace("end", L"icons.loadResource");
 	if (!hIcon)
 		throw std::runtime_error("IconList::addIcon : LoadIcon() function return null");
 
+	startupTrace("begin", L"icons.appendResource");
 	ImageList_AddIcon(_hImglst, hIcon);
+	startupTrace("end", L"icons.appendResource");
 	::DestroyIcon(hIcon);
 };
 
@@ -100,6 +104,7 @@ HIMAGELIST ToolBarIcons::getList(int index) const
     IconList& list = _iconListVector[index];
     if (list.getHandle() && !_listDirty[index])
         return list.getHandle();
+    StartupTraceScope trace(L"toolbar.selectedIcons");
     if (list.getHandle())
         ImageList_SetIconSize(list.getHandle(), _iconSize, _iconSize);
     else

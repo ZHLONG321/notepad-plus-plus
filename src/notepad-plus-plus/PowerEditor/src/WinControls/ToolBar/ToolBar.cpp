@@ -272,6 +272,7 @@ void ToolBar::reset(bool create)
 
 	if (!_hSelf)
 	{
+		StartupTraceScope trace(L"toolbar.createWindow");
 		DWORD dwExtraStyle = 0;
 		if (NppDarkMode::isEnabled())
 		{
@@ -289,8 +290,10 @@ void ToolBar::reset(bool create)
 					NULL,
 					_hInst,
 					0);
+		startupTrace("toolbar.window.created");
 
 		NppDarkMode::setDarkTooltips(_hSelf, NppDarkMode::ToolTipsType::toolbar);
+		startupTrace("toolbar.tooltip.ready");
 
 		// Send the TB_BUTTONSTRUCTSIZE message, which is required for 
 		// backward compatibility.
