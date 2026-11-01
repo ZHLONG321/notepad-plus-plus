@@ -130,6 +130,13 @@ LRESULT Notepad_plus_Window::runProc(HWND hwnd, UINT message, WPARAM wParam, LPA
 				return 0;
 			}
 			return _notepad_plus_plus_core.process(hwnd, message, wParam, lParam);
+		case NPPM_MENUCOMMAND:
+		{
+			DWORD foregroundProcess = 0;
+			::GetWindowThreadProcessId(::GetForegroundWindow(), &foregroundProcess);
+			StartupNoActivate noActivate(_startupNoActivate && foregroundProcess != ::GetCurrentProcessId());
+			return _notepad_plus_plus_core.process(hwnd, message, wParam, lParam);
+		}
 		default:
 		{
 			if (this)
@@ -785,9 +792,6 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case NPPM_MENUCOMMAND:
 		{
-			DWORD foregroundProcess = 0;
-			::GetWindowThreadProcessId(::GetForegroundWindow(), &foregroundProcess);
-			StartupNoActivate noActivate(_startupNoActivate && foregroundProcess != ::GetCurrentProcessId());
 			command(static_cast<int32_t>(lParam));
 			return TRUE;
 		}
