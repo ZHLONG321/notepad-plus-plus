@@ -183,8 +183,10 @@ void DocTabView::bufferUpdated(Buffer * buffer, int mask)
 
 	::SendMessage(_hSelf, TCM_SETITEM, index, reinterpret_cast<LPARAM>(&tie));
 
-	// A changed label can alter row count, including insertion and replacement.
-	if (mask & BufferChangeFilename)
+	// Native tabs recalculate their rows when an item changes. Relayout the
+	// host only when those rows change the space available to the editor.
+	if ((mask & BufferChangeFilename) && !_hideTabBarStatus
+		&& getTabBarThickness() != _tabBarThickness)
 		::SendMessage(_hParent, WM_SIZE, 0, 0);
 }
 
