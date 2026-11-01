@@ -718,6 +718,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int)
 			going = ::GetMessageW(&msg, NULL, 0, 0) != 0;
 			if (going)
 			{
+				notepad_plus_plus.onInputMessage(msg);
 				// if the message doesn't belong to the notepad_plus_plus's dialog
 				if (!notepad_plus_plus.isDlgsMsg(&msg))
 				{
