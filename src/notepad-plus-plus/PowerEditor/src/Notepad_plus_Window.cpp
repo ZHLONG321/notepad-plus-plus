@@ -437,15 +437,35 @@ void Notepad_plus_Window::loadOneDelayedPlugin()
 		for (size_t i = 0; i < tabs->nbItem(); ++i)
 		{
 			const BufferID buffer = tabs->getBufferByIndex(i);
-			if (std::find(buffers.begin(), buffers.end(), buffer) == buffers.end() && !buffer->isUntitled())
+			if (std::find(buffers.begin(), buffers.end(), buffer) == buffers.end() &&
+				(!buffer->isUntitled() || buffer->isLoadedDirty()))
 				buffers.push_back(buffer);
 		}
 	for (const auto buffer : buffers)
 	{
-		notification.nmhdr.code = NPPN_FILEOPENED;
-		notification.nmhdr.idFrom = reinterpret_cast<uptr_t>(buffer);
-		manager.notify(index, &notification);
+		if (MainFileManager.getBufferIndexByID(buffer) < 0)
+			continue;
+		const bool restoredSnapshot = buffer->isLoadedDirty();
+		// Match NppIO's startup load lifecycle, including unnamed snapshots.
+		// A plugin may close a document from a callback, so recheck its lifetime.
+		auto send = [&](UINT code, HWND from, uptr_t id) {
+			if (MainFileManager.getBufferIndexByID(buffer) < 0)
+				return false;
+			notification.nmhdr.code = code;
+			notification.nmhdr.hwndFrom = from;
+			notification.nmhdr.idFrom = id;
+			manager.notify(index, &notification);
+			return MainFileManager.getBufferIndexByID(buffer) >= 0;
+		};
+		const uptr_t bufferID = reinterpret_cast<uptr_t>(buffer);
+		if (!send(NPPN_FILEBEFORELOAD, _hSelf, 0))
+			continue;
+		if (restoredSnapshot && !send(NPPN_SNAPSHOTDIRTYFILELOADED, nullptr, bufferID))
+			continue;
+		if (send(NPPN_FILEBEFOREOPEN, _hSelf, bufferID))
+			send(NPPN_FILEOPENED, _hSelf, bufferID);
 	}
+	notification.nmhdr.hwndFrom = _hSelf;
 	notification.nmhdr.code = NPPN_READY;
 	notification.nmhdr.idFrom = 0;
 	manager.notify(index, &notification);
