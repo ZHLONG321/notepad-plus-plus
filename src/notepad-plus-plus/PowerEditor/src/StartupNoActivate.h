@@ -86,10 +86,10 @@ private:
 		if (code == HC_ACTION)
 		{
 			auto message = reinterpret_cast<CWPRETSTRUCT*>(lParam);
-			if (!(::GetWindowLongPtr(message->hwnd, GWL_STYLE) & WS_CHILD) &&
-				((message->message == WM_WINDOWPOSCHANGED &&
+			if (((message->message == WM_WINDOWPOSCHANGED &&
 					(reinterpret_cast<WINDOWPOS*>(message->lParam)->flags & SWP_SHOWWINDOW)) ||
-					(message->message == WM_INITDIALOG && ::IsWindowVisible(message->hwnd))))
+					(message->message == WM_INITDIALOG && ::IsWindowVisible(message->hwnd))) &&
+				!(::GetWindowLongPtr(message->hwnd, GWL_STYLE) & WS_CHILD))
 			{
 				// A visible-on-create dialog and the modal manager can reorder it
 				// after the creation hook. Finish that show transaction at the bottom.

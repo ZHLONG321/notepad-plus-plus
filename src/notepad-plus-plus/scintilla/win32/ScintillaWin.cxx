@@ -2208,7 +2208,9 @@ void ScintillaWin::UpdateSystemCaret() {
 
 int ScintillaWin::SetScrollInfo(int nBar, LPCSCROLLINFO lpsi, BOOL bRedraw) noexcept {
 	StartupTraceScope trace(L"editor.setScrollInfo");
-	return ::SetScrollInfo(MainHWND(), nBar, lpsi, bRedraw);
+	// File loading also uses hidden views. Keep the native range and position
+	// current without redrawing their non-client scroll bars for each block.
+	return ::SetScrollInfo(MainHWND(), nBar, lpsi, bRedraw && ::IsWindowVisible(MainHWND()));
 }
 
 bool ScintillaWin::GetScrollInfo(int nBar, LPSCROLLINFO lpsi) noexcept {
