@@ -30,6 +30,7 @@
 #include "fileBrowser.h"
 #include "NppDarkMode.h"
 #include "StartupTrace.h"
+#include "StartupNoActivate.h"
 
 using namespace std;
 
@@ -784,6 +785,9 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case NPPM_MENUCOMMAND:
 		{
+			DWORD foregroundProcess = 0;
+			::GetWindowThreadProcessId(::GetForegroundWindow(), &foregroundProcess);
+			StartupNoActivate noActivate(_startupNoActivate && foregroundProcess != ::GetCurrentProcessId());
 			command(static_cast<int32_t>(lParam));
 			return TRUE;
 		}
