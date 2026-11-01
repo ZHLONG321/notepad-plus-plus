@@ -45,15 +45,18 @@ public:
 
 	virtual void reSizeTo(RECT & rc) // should NEVER be const !!!
 	{
-		::MoveWindow(_hSelf, rc.left, rc.top, rc.right, rc.bottom, TRUE);
-		redraw();
+		// Let the message loop paint the completed layout. MoveWindow(TRUE)
+		// paints immediately, exposing intermediate sibling positions, and the
+		// following redraw used to erase that freshly painted content again.
+		::SetWindowPos(_hSelf, nullptr, rc.left, rc.top, rc.right, rc.bottom,
+			SWP_NOZORDER | SWP_NOACTIVATE | SWP_DEFERERASE);
 	}
 
 
 	virtual void reSizeToWH(RECT& rc) // should NEVER be const !!!
 	{
-		::MoveWindow(_hSelf, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top, TRUE);
-		redraw();
+		::SetWindowPos(_hSelf, nullptr, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top,
+			SWP_NOZORDER | SWP_NOACTIVATE | SWP_DEFERERASE);
 	}
 
 
