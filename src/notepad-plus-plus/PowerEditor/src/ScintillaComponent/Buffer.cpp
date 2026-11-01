@@ -25,6 +25,7 @@
 #include "ScintillaEditView.h"
 #include "EncodingMapper.h"
 #include "uchardet.h"
+#include "StartupTrace.h"
 
 static const int blockSize = 128 * 1024 + 4;
 static const int CR = 0x0D;
@@ -1261,6 +1262,7 @@ LangType FileManager::detectLanguageFromTextBegining(const unsigned char *data, 
 
 bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data, Utf8_16_Read * unicodeConvertor, LoadedFileFormat& fileFormat)
 {
+	StartupTraceScope trace(L"file.read.decode");
 	FILE *fp = generic_fopen(filename, TEXT("rb"));
 	if (!fp)
 		return false;

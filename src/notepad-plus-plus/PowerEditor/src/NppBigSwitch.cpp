@@ -29,6 +29,7 @@
 #include "functionListPanel.h"
 #include "fileBrowser.h"
 #include "NppDarkMode.h"
+#include "StartupTrace.h"
 
 using namespace std;
 
@@ -601,6 +602,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case WM_SIZE:
 		{
+			StartupTraceScope trace(L"window.layout");
 			RECT rc;
 			_pPublicInterface->getClientRect(rc);
 			if (lParam == 0)

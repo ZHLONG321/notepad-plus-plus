@@ -327,6 +327,7 @@ BufferID Notepad_plus::doOpen(const generic_string& fileName, bool isRecursive, 
     scnN.nmhdr.idFrom = 0;
     _pluginsManager.notify(&scnN);
 
+	startupTrace("file.open.before.read");
     if (encoding == -1)
     {
 		encoding = getHtmlXmlEncoding(longFileName);
@@ -358,6 +359,7 @@ BufferID Notepad_plus::doOpen(const generic_string& fileName, bool isRecursive, 
 		buffer = MainFileManager.loadFile(longFileName, NULL, encoding);
 	}
 
+	startupTrace("file.open.after.read");
     if (buffer != BUFFER_INVALID)
     {
         _isFileOpening = true;
@@ -374,7 +376,9 @@ BufferID Notepad_plus::doOpen(const generic_string& fileName, bool isRecursive, 
         _pluginsManager.notify(&scnN);
 
 
+		startupTrace("file.open.before.tab");
         loadBufferIntoView(buffer, currentView());
+		startupTrace("file.open.after.tab");
 
         if (_pTrayIco)
         {
