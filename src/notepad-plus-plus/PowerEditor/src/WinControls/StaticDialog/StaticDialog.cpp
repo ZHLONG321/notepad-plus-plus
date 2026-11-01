@@ -16,9 +16,33 @@
 
 #include <stdio.h>
 #include <windows.h>
+#include <uxtheme.h>
 #include "StaticDialog.h"
 #include "Common.h"
 #include "NppDarkMode.h"
+
+namespace
+{
+	bool paintDialogBackground(HWND hwnd, HDC dc)
+	{
+		if (!dc || !NppDarkMode::isEnabled())
+			return false;
+
+		// Ask the dialog for its own palette, including specialized dialog colors.
+		// Resolve the brush on every paint because custom theme brushes can change.
+		int savedDC = ::SaveDC(dc);
+		auto brush = reinterpret_cast<HBRUSH>(::SendMessage(hwnd, WM_CTLCOLORDLG,
+			reinterpret_cast<WPARAM>(dc), reinterpret_cast<LPARAM>(hwnd)));
+		if (!brush)
+			brush = NppDarkMode::getDarkerBackgroundBrush();
+		RECT rc;
+		::GetClientRect(hwnd, &rc);
+		bool painted = ::FillRect(dc, &rc, brush) != 0;
+		if (savedDC)
+			::RestoreDC(dc, savedDC);
+		return painted;
+	}
+}
 
 StaticDialog::~StaticDialog()
 {
@@ -236,6 +260,8 @@ INT_PTR CALLBACK StaticDialog::dlgProc(HWND hwnd, UINT message, WPARAM wParam, L
 		case WM_INITDIALOG:
 		{
 			NppDarkMode::setDarkTitleBar(hwnd);
+			if (NppDarkMode::isEnabled())
+				::EnableThemeDialogTexture(hwnd, ETDT_DISABLE);
 
 			StaticDialog *pStaticDlg = reinterpret_cast<StaticDialog *>(lParam);
 			pStaticDlg->_hSelf = hwnd;
@@ -249,9 +275,31 @@ INT_PTR CALLBACK StaticDialog::dlgProc(HWND hwnd, UINT message, WPARAM wParam, L
 		default:
 		{
 			StaticDialog *pStaticDlg = reinterpret_cast<StaticDialog *>(::GetWindowLongPtr(hwnd, GWLP_USERDATA));
-			if (!pStaticDlg)
-				return FALSE;
-			return pStaticDlg->run_dlgProc(message, wParam, lParam);
+			// Several dialogs acknowledge WM_PRINTCLIENT without painting. Supply
+			// their themed base before any custom drawing or animation capture.
+			bool printBackground = message == WM_PRINTCLIENT &&
+				paintDialogBackground(hwnd, reinterpret_cast<HDC>(wParam));
+			INT_PTR result = pStaticDlg ? pStaticDlg->run_dlgProc(message, wParam, lParam) : FALSE;
+			if (result)
+				return result;
+			if (printBackground)
+				return TRUE;
+			if (NppDarkMode::isEnabled())
+			{
+				switch (message)
+				{
+					case WM_ERASEBKGND:
+						return paintDialogBackground(hwnd, reinterpret_cast<HDC>(wParam));
+					case WM_CTLCOLORDLG:
+					case WM_CTLCOLORSTATIC:
+						return NppDarkMode::onCtlColorDarker(reinterpret_cast<HDC>(wParam));
+					case WM_CTLCOLOREDIT:
+						return NppDarkMode::onCtlColorSofter(reinterpret_cast<HDC>(wParam));
+					case WM_CTLCOLORLISTBOX:
+						return NppDarkMode::onCtlColor(reinterpret_cast<HDC>(wParam));
+				}
+			}
+			return FALSE;
 		}
 	}
 }
