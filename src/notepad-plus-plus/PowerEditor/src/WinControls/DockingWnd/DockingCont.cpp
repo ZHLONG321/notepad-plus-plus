@@ -66,6 +66,7 @@ DockingCont::DockingCont()
 	_isTopCaption		= CAPTION_TOP;
 	_dragFromTab		= FALSE;
 	_hContTab			= NULL;
+	_hCaption			= NULL;
 	_hDefaultTabProc	= NULL;
 	_beginDrag			= FALSE;
 	_prevItem			= 0;
@@ -119,6 +120,9 @@ void DockingCont::doDialog(bool willBeShown, bool isFloating)
 		{
 			::SetWindowLongPtr(_hSelf, GWL_STYLE, CHILD_STYLES);
 			::SetWindowLongPtr(_hSelf, GWL_EXSTYLE, CHILD_EXSTYLES);
+			// Fixed containers are children of the main window; notifications
+			// still use the docking manager stored in _hParent.
+			::SetParent(_hSelf, ::GetParent(_hParent));
 			::ShowWindow(_hCaption, SW_SHOW);
 		}
 
@@ -132,13 +136,17 @@ void DockingCont::doDialog(bool willBeShown, bool isFloating)
 
 tTbData* DockingCont::createToolbar(tTbData data)
 {
-	// A previous floating location needs its identity and rectangle at startup,
-	// but no native controls until a panel actually moves into that container.
+	// Empty containers keep their identity without native controls until used.
 	if (!isCreated())
 	{
 		doDialog(false, _isFloating);
-		reSizeToWH(_reservedFloatingRect);
-		startupTrace("dock.floating.materialized");
+		if (_isFloating)
+		{
+			reSizeToWH(_reservedFloatingRect);
+			startupTrace("dock.floating.materialized");
+		}
+		else
+			startupTrace("dock.container.materialized");
 	}
 	tTbData *pTbData = new tTbData;
 
@@ -1203,6 +1211,8 @@ INT_PTR CALLBACK DockingCont::run_dlgProc(UINT Message, WPARAM wParam, LPARAM lP
 
 void DockingCont::onSize()
 {
+	if (!isCreated())
+		return;
 	TCITEM tcItem = {0};
 	RECT rc = {0};
 	RECT rcTemp = {0};

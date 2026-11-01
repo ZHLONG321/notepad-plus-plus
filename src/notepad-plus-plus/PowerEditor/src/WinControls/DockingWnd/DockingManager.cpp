@@ -136,14 +136,11 @@ void DockingManager::init(HINSTANCE hInst, HWND hWnd, Window ** ppWin)
 
 	setClientWnd(ppWin);
 
-	// create docking container
+	// Reserve fixed container identities; create controls when a panel arrives.
 	for (int iCont = 0; iCont < DOCKCONT_MAX; ++iCont)
 	{
 		_vContainer[iCont]->init(_hInst, _hSelf);
-		_vContainer[iCont]->doDialog(false);
-		startupTrace("dock.container.created");
-		::SetParent(_vContainer[iCont]->getHSelf(), _hParent);
-		startupTrace("dock.container.parented");
+		startupTrace("dock.container.reserved");
 
 		if ((iCont == CONT_TOP) || (iCont == CONT_BOTTOM))
 			_vSplitter[iCont]->init(_hInst, _hParent, _hSelf, DMS_HORIZONTAL);
