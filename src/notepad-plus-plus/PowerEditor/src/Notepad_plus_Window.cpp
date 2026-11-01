@@ -144,8 +144,10 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 	if (nppGUI._rememberLastSession && !nppGUI._isCmdlineNosessionActivated)
 		_notepad_plus_plus_core.loadLastSession();
 
-	std::vector<generic_string> fileNames;
 	startupTrace("window.positioned");
+	{
+	StartupTraceScope trace(L"startup.configurationCatalogs");
+	std::vector<generic_string> fileNames;
 	std::vector<generic_string> patterns;
 	patterns.push_back(TEXT("*.xml"));
 
@@ -210,11 +212,17 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		}
 	}
 
+	}
 	// Restore all dockable panels from the last session
+	{
+	StartupTraceScope trace(L"startup.savedPanels");
 	for (size_t i = 0, len = _notepad_plus_plus_core._internalFuncIDs.size() ; i < len ; ++i)
 		::SendMessage(_hSelf, WM_COMMAND, _notepad_plus_plus_core._internalFuncIDs[i], 0);
+	}
 
 	std::vector<generic_string> fns;
+	{
+	StartupTraceScope trace(L"startup.commandLineFiles");
 	if (cmdLine)
 		fns = _notepad_plus_plus_core.loadCommandlineParams(cmdLine, cmdLineParams);
 
@@ -224,6 +232,7 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 	{
 		generic_string emptyStr;
 		_notepad_plus_plus_core.launchFileBrowser(fns, emptyStr, true);
+	}
 	}
 	// Present only after layout, files and saved panels have been restored.
 	if (nppParams.doFunctionListExport() || nppParams.doPrintAndExit())
