@@ -43,7 +43,7 @@ void IconList::create(int iconSize, HINSTANCE hInst, int *iconIDArray, int iconI
 		addIcon(iconIDArray[i]);
 };
 
-void IconList::addIcon(int iconID) const 
+void IconList::addIcon(int iconID) const
 {
 	startupTrace("begin", L"icons.loadResource");
 	HICON hIcon = ::LoadIcon(_hInst, MAKEINTRESOURCE(iconID));

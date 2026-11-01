@@ -16,6 +16,7 @@
 
 
 #include "NppDarkMode.h"
+#include "StartupTrace.h"
 
 #include "DarkMode/DarkMode.h"
 #include "DarkMode/UAHMenuBar.h"
@@ -1581,6 +1582,29 @@ namespace NppDarkMode
 		NppDarkMode::setDarkExplorerTheme(hwnd);
 	}
 
+	constexpr UINT_PTR g_tooltipThemeSubclassID = 42;
+
+	LRESULT CALLBACK TooltipThemeSubclass(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam,
+		UINT_PTR subclassID, DWORD_PTR)
+	{
+		if (message == WM_NCDESTROY)
+			RemoveWindowSubclass(hwnd, TooltipThemeSubclass, subclassID);
+		else if (message == WM_TIMER || message == TTM_RELAYEVENT || message == TTM_POPUP ||
+			message == TTM_ADJUSTRECT || message == TTM_GETBUBBLESIZE ||
+			(message == TTM_TRACKACTIVATE && wParam) ||
+			(message == WM_WINDOWPOSCHANGING &&
+				(reinterpret_cast<WINDOWPOS*>(lParam)->flags & SWP_SHOWWINDOW)) ||
+			(message == WM_SHOWWINDOW && wParam) || message == WM_PAINT ||
+			message == WM_ERASEBKGND || message == WM_PRINTCLIENT)
+		{
+			// Remove first: changing the theme can synchronously send window messages.
+			RemoveWindowSubclass(hwnd, TooltipThemeSubclass, subclassID);
+			StartupTraceScope trace(L"tooltip.firstTheme");
+			NppDarkMode::setDarkExplorerTheme(hwnd);
+		}
+		return DefSubclassProc(hwnd, message, wParam, lParam);
+	}
+
 	void setDarkTooltips(HWND hwnd, ToolTipsType type)
 	{
 		UINT msg = 0;
@@ -1603,18 +1627,20 @@ namespace NppDarkMode
 				break;
 		}
 
-		if (msg == 0)
+		auto hTips = msg ? reinterpret_cast<HWND>(::SendMessage(hwnd, msg, 0, 0)) : hwnd;
+		if (hTips == nullptr)
+			return;
+
+		// A hidden tooltip needs no theme resources until its first interaction.
+		// The subclass also covers direct display and rendering, before any paint.
+		if (!::IsWindowVisible(hTips) &&
+			SetWindowSubclass(hTips, TooltipThemeSubclass, g_tooltipThemeSubclassID, 0))
 		{
-			NppDarkMode::setDarkExplorerTheme(hwnd);
+			startupTrace("tooltip.theme.pending");
+			return;
 		}
-		else
-		{
-			auto hTips = reinterpret_cast<HWND>(::SendMessage(hwnd, msg, 0, 0));
-			if (hTips != nullptr)
-			{
-				NppDarkMode::setDarkExplorerTheme(hTips);
-			}
-		}
+		RemoveWindowSubclass(hTips, TooltipThemeSubclass, g_tooltipThemeSubclassID);
+		NppDarkMode::setDarkExplorerTheme(hTips);
 	}
 
 	void setDarkLineAbovePanelToolbar(HWND hwnd)
