@@ -300,6 +300,11 @@ void ScintillaEditView::init(HINSTANCE hInst, HWND hPere)
 	execute(SCI_INDICSETUNDER, SCE_UNIVERSAL_FOUND_STYLE_EXT4, true);
 	execute(SCI_INDICSETUNDER, SCE_UNIVERSAL_FOUND_STYLE_EXT5, true);
 
+	// Bound first-time styling while scrolling or switching to an unstyled
+	// document. Scintilla finishes the visible region in idle-time slices,
+	// preserving its normal lexer, fold and modification notifications.
+	execute(SCI_SETIDLESTYLING, SC_IDLESTYLING_TOVISIBLE);
+
 	if ((NppParameters::getInstance()).getNppGUI()._writeTechnologyEngine == directWriteTechnology)
 		execute(SCI_SETTECHNOLOGY, SC_TECHNOLOGY_DIRECTWRITE);
 	// If useDirectWrite is turned off, leave the technology setting untouched,
