@@ -3550,6 +3550,7 @@ void ScintillaEditView::notifyMarkers(Buffer * buf, bool isHide, int location, b
 //hide is false only when user click on margin
 void ScintillaEditView::runMarkers(bool doHide, size_t searchStart, bool endOfDoc, bool doDelete)
 {
+	StartupTraceScope trace(L"editor.hiddenLines");
 	//Removes markers if opening
 	/*
 	AllLines = (start,ENDOFDOCUMENT)
