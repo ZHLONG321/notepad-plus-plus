@@ -407,9 +407,16 @@ void Notepad_plus_Window::loadOneDelayedPlugin()
 	if (_delayedLoadInProgress || !_startupEditorPainted || !::IsWindowVisible(_hSelf) ||
 		HIWORD(::GetQueueStatus(QS_INPUT | QS_PAINT)))
 		return;
-	LASTINPUTINFO input = {sizeof(input)};
-	if (::GetLastInputInfo(&input) && ::GetTickCount() - input.dwTime < 100)
-		return;
+	// Input in another application must not indefinitely postpone our plugins.
+	// Keep the quiet period while any window of this process is foreground.
+	DWORD foregroundProcess = 0;
+	::GetWindowThreadProcessId(::GetForegroundWindow(), &foregroundProcess);
+	if (foregroundProcess == ::GetCurrentProcessId())
+	{
+		LASTINPUTINFO input = {sizeof(input)};
+		if (::GetLastInputInfo(&input) && ::GetTickCount() - input.dwTime < 100)
+			return;
+	}
 
 	_delayedLoadInProgress = true;
 	struct ResetBusy { bool& busy; ~ResetBusy() { busy = false; } } resetBusy{_delayedLoadInProgress};
