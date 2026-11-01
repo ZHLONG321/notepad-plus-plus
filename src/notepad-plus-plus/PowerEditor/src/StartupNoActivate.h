@@ -139,9 +139,10 @@ private:
 		if (depth() && ((message == WM_WINDOWPOSCHANGED &&
 				(reinterpret_cast<WINDOWPOS*>(lParam)->flags & SWP_SHOWWINDOW)) ||
 				(message == WM_INITDIALOG && ::IsWindowVisible(hwnd))) &&
-				!(::GetWindowLongPtr(hwnd, GWL_STYLE) & WS_CHILD))
+				!(::GetWindowLongPtr(hwnd, GWL_STYLE) & WS_CHILD) && ::GetWindow(hwnd, GW_OWNER))
 		{
-			// Complete the show transaction after the window's own processing.
+			// Owned dialogs can be reordered by the modal manager. Ownerless
+			// windows already honor HWND_BOTTOM in WM_WINDOWPOSCHANGING.
 			::SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0,
 				SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
 		}
