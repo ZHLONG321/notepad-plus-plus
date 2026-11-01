@@ -3,6 +3,7 @@
 // processing otherwise activates the application before its main window opens.
 #pragma once
 #include <windows.h>
+#include <commctrl.h>
 
 class StartupNoActivate final
 {
@@ -10,18 +11,72 @@ public:
 	explicit StartupNoActivate(bool enabled)
 	{
 		if (enabled)
+		{
+			_enabled = true;
+			++depth();
 			_hook = ::SetWindowsHookEx(WH_CBT, hookProc, nullptr, ::GetCurrentThreadId());
+			_positionHook = ::SetWindowsHookEx(WH_CALLWNDPROCRET, positionHookProc, nullptr, ::GetCurrentThreadId());
+			::EnumThreadWindows(::GetCurrentThreadId(), updateSubclass, TRUE);
+		}
 	}
 	~StartupNoActivate()
 	{
 		if (_hook)
 			::UnhookWindowsHookEx(_hook);
+		if (_positionHook)
+			::UnhookWindowsHookEx(_positionHook);
+		if (_enabled && --depth() == 0)
+			::EnumThreadWindows(::GetCurrentThreadId(), updateSubclass, FALSE);
 	}
 	StartupNoActivate(const StartupNoActivate&) = delete;
 	StartupNoActivate& operator=(const StartupNoActivate&) = delete;
 
 private:
 	HHOOK _hook = nullptr;
+	HHOOK _positionHook = nullptr;
+	bool _enabled = false;
+	static unsigned& depth()
+	{
+		static thread_local unsigned value = 0;
+		return value;
+	}
+	static BOOL CALLBACK updateSubclass(HWND hwnd, LPARAM enabled)
+	{
+		if (enabled)
+			::SetWindowSubclass(hwnd, positionProc, 0x4e505042, 0);
+		else
+			::RemoveWindowSubclass(hwnd, positionProc, 0x4e505042);
+		return TRUE;
+	}
+	static LRESULT CALLBACK positionProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam,
+		UINT_PTR subclass, DWORD_PTR)
+	{
+		if (message == WM_NCDESTROY)
+			::RemoveWindowSubclass(hwnd, positionProc, subclass);
+		LRESULT result = ::DefSubclassProc(hwnd, message, wParam, lParam);
+		if (message == WM_WINDOWPOSCHANGING && depth())
+		{
+			auto position = reinterpret_cast<WINDOWPOS*>(lParam);
+			if (!(position->flags & SWP_NOZORDER) || (position->flags & SWP_SHOWWINDOW))
+			{
+				position->hwndInsertAfter = HWND_BOTTOM;
+				position->flags &= ~SWP_NOZORDER;
+			}
+		}
+		return result;
+	}
+	static LRESULT CALLBACK positionHookProc(int code, WPARAM wParam, LPARAM lParam)
+	{
+		if (code == HC_ACTION)
+		{
+			auto message = reinterpret_cast<CWPRETSTRUCT*>(lParam);
+			// Install after successful non-client creation, before any show call.
+			if (message->message == WM_NCCREATE && message->lResult &&
+				!(::GetWindowLongPtr(message->hwnd, GWL_STYLE) & WS_CHILD))
+				updateSubclass(message->hwnd, TRUE);
+		}
+		return ::CallNextHookEx(nullptr, code, wParam, lParam);
+	}
 	static LRESULT CALLBACK hookProc(int code, WPARAM wParam, LPARAM lParam)
 	{
 		if (code == HCBT_CREATEWND)
