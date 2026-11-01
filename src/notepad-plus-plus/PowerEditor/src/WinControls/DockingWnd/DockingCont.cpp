@@ -107,7 +107,9 @@ void DockingCont::doDialog(bool willBeShown, bool isFloating)
 			::SetParent(_hSelf, nullptr);
 			::SetWindowLongPtr(_hSelf, GWL_STYLE, POPUP_STYLES);
 			::SetWindowLongPtr(_hSelf, GWL_EXSTYLE, POPUP_EXSTYLES);
-			::SetWindowLongPtr(_hSelf, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(_hParent));
+			// The docking manager is a hidden child, not a valid popup owner.
+			HWND owner = ::GetAncestor(_hParent, GA_ROOT);
+			::SetWindowLongPtr(_hSelf, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(owner));
 			::SetWindowPos(_hSelf, nullptr, 0, 0, 0, 0,
 				SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE);
 			::ShowWindow(_hCaption, SW_HIDE);
