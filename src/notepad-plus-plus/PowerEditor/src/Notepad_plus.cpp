@@ -5664,6 +5664,12 @@ void Notepad_plus::doSynScorll(HWND whichView)
 
 bool Notepad_plus::getIntegralDockingData(tTbData & dockData, int & iCont, bool & isVisible)
 {
+	if (startupTraceHandle() != INVALID_HANDLE_VALUE)
+	{
+		TCHAR detail[512] = {};
+		generic_sprintf(detail, TEXT("%s:%d"), dockData.pszModuleName, dockData.dlgID);
+		startupTrace("panel.registration", detail);
+	}
 	DockingManagerData & dockingData = (DockingManagerData &)(NppParameters::getInstance()).getNppGUI()._dockingData;
 
 	for (size_t i = 0, len = dockingData._pluginDockInfo.size(); i < len ; ++i)
