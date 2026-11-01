@@ -220,6 +220,16 @@ void ScintillaEditView::init(HINSTANCE hInst, HWND hPere)
 	{
 		throw std::runtime_error("ScintillaEditView::init : SCI_GETDIRECTPOINTER message failed");
 	}
+	// Seed the selected theme before any plugin or parent can expose this view.
+	StyleArray& startupStyles = NppParameters::getInstance().getMiscStylerArray();
+	int startupDefault = startupStyles.getStylerIndexByID(STYLE_DEFAULT);
+	if (startupDefault != -1)
+	{
+		Style style = startupStyles.getStyler(startupDefault);
+		style._colorStyle = COLORSTYLE_ALL;
+		setStyle(style);
+		execute(SCI_STYLECLEARALL);
+	}
 
 	execute(SCI_SETMARGINMASKN, _SC_MARGE_FOLDER, SC_MASK_FOLDERS);
 	showMargin(_SC_MARGE_FOLDER, true);
@@ -347,6 +357,31 @@ LRESULT ScintillaEditView::scintillaNew_Proc(HWND hwnd, UINT Message, WPARAM wPa
 {
 	switch (Message)
 	{
+		case WM_ERASEBKGND:
+		{
+			if (_initialPaintPending)
+			{
+				// Scintilla normally skips erasure. Before its first real paint,
+				// fill the surface with the current default style background.
+				HDC dc = reinterpret_cast<HDC>(wParam);
+				RECT rc;
+				::GetClientRect(hwnd, &rc);
+				COLORREF previous = ::SetDCBrushColor(dc, static_cast<COLORREF>(execute(SCI_STYLEGETBACK, STYLE_DEFAULT)));
+				::FillRect(dc, &rc, static_cast<HBRUSH>(::GetStockObject(DC_BRUSH)));
+				::SetDCBrushColor(dc, previous);
+				return TRUE;
+			}
+			break;
+		}
+
+		case WM_PAINT:
+		{
+			LRESULT result = _callWindowProc(_scintillaDefaultProc, hwnd, Message, wParam, lParam);
+			if (::IsWindowVisible(hwnd))
+				_initialPaintPending = false;
+			return result;
+		}
+
 		case NPPM_INTERNAL_REFRESHDARKMODE:
 		{
 			NppDarkMode::setDarkScrollBar(_hSelf);
@@ -1474,7 +1509,7 @@ void ScintillaEditView::defineDocType(LangType typeDoc)
     }
 	setSpecialIndicator(*pStyle);
 
-    // Il faut surtout faire un test ici avant d'exécuter SCI_SETCODEPAGE
+    // Il faut surtout faire un test ici avant d'exÃ©cuter SCI_SETCODEPAGE
     // Sinon y'aura un soucis de performance!
 	if (isCJK())
 	{

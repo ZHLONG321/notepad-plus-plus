@@ -631,6 +631,7 @@ protected:
 	SCINTILLA_PTR  _pScintillaPtr = nullptr;
 	static WNDPROC _scintillaDefaultProc;
 	CallWindowProcFunc _callWindowProc = nullptr;
+	bool _initialPaintPending = true;
 	BufferID attachDefaultDoc();
 
 	//Store the current buffer so it can be retrieved later
@@ -937,7 +938,7 @@ protected:
 
 	void setREBOLLexer() {
 		setLexer(SCLEX_REBOL, L_REBOL, LIST_0 | LIST_1 | LIST_2 | LIST_3 | LIST_4 | LIST_5 | LIST_6);
-		execute(SCI_SETWORDCHARS, 0, reinterpret_cast<LPARAM>("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789?!.’+-*&|=_~"));
+		execute(SCI_SETWORDCHARS, 0, reinterpret_cast<LPARAM>("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789?!.â€™+-*&|=_~"));
 	};
 
 	void setRegistryLexer() {
