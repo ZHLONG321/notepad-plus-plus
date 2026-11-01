@@ -62,6 +62,12 @@ public:
 
 	bool isDlgsMsg(MSG *msg) const;
 	void onEditorPainted() { _startupEditorPainted = true; }
+	void onInputMessage(const MSG& msg) {
+		if ((msg.message >= WM_KEYFIRST && msg.message <= WM_KEYLAST) ||
+			(msg.message >= WM_MOUSEFIRST && msg.message <= WM_MOUSELAST) ||
+			(msg.message >= WM_NCMOUSEMOVE && msg.message <= WM_NCXBUTTONDBLCLK))
+			_lastInputTick = ::GetTickCount();
+	}
 
 	HACCEL getAccTable() const {
 		return _notepad_plus_plus_core.getAccTable();
@@ -111,6 +117,7 @@ private:
 	bool _startupEditorPainted = false;
 	bool _startupNoActivate = false;
 	bool _delayedLoadInProgress = false;
+	DWORD _lastInputTick = 0;
 	UINT_PTR _delayedPluginTimer = 0;
 	void loadOneDelayedPlugin();
 

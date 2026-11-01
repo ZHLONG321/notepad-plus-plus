@@ -416,6 +416,9 @@ void Notepad_plus_Window::loadOneDelayedPlugin()
 	if (_delayedLoadInProgress || !_startupEditorPainted || !::IsWindowVisible(_hSelf) ||
 		HIWORD(::GetQueueStatus(QS_INPUT | QS_PAINT)))
 		return;
+	// An empty queue immediately after a keystroke is not an input pause.
+	if (_lastInputTick && ::GetTickCount() - _lastInputTick < 100)
+		return;
 	// Input in another application must not indefinitely postpone our plugins.
 	// Keep the quiet period while any window of this process is foreground.
 	DWORD foregroundProcess = 0;
@@ -448,6 +451,7 @@ void Notepad_plus_Window::loadOneDelayedPlugin()
 	notification.nmhdr.hwndFrom = _hSelf;
 	notification.nmhdr.code = NPPN_TBMODIFICATION;
 	manager.notify(index, &notification);
+	manager.runDelayedStartupCommands(index);
 	std::vector<BufferID> buffers;
 	for (auto* tabs : {&core._mainDocTab, &core._subDocTab})
 		for (size_t i = 0; i < tabs->nbItem(); ++i)

@@ -21,6 +21,7 @@
 #include "Parameters.h"
 #include "PluginInterface.h"
 #include "IDAllocator.h"
+#include <utility>
 
 typedef BOOL (__cdecl * PFUNCISUNICODE)();
 
@@ -95,6 +96,7 @@ public:
 	int loadNextDelayedPlugin();
 	size_t getCommandStartupOrder(int commandID) const;
 	void restoreShortcutOrder();
+	void runDelayedStartupCommands(size_t index);
 
     bool unloadPlugin(int index, HWND nppHandle);
 
@@ -135,6 +137,7 @@ private:
 	bool _noMoreNotification = false;
 	std::vector<generic_string> _discoveredModules;
 	std::vector<generic_string> _delayedPlugins;
+	std::vector<std::pair<generic_string, int>> _delayedStartupCommands;
 	size_t startupOrder(const generic_string& module) const;
 
 	void pluginCrashAlert(const TCHAR *pluginName, const TCHAR *funcSignature)

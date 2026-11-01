@@ -616,6 +616,18 @@ void PluginsManager::runPluginCommand(size_t i)
 
 void PluginsManager::runPluginCommand(const TCHAR *pluginName, int commandID)
 {
+	// A saved visible panel may request its command before its DLL is loaded.
+	// Retain the request instead of forcing the plugin into the first frame.
+	for (const auto& path : _delayedPlugins)
+	{
+		if (!generic_stricmp(::PathFindFileName(path.c_str()), pluginName))
+		{
+			const auto request = std::make_pair(generic_string(pluginName), commandID);
+			if (std::find(_delayedStartupCommands.begin(), _delayedStartupCommands.end(), request) == _delayedStartupCommands.end())
+				_delayedStartupCommands.push_back(request);
+			return;
+		}
+	}
 	for (size_t i = 0, len = _pluginsCommands.size() ; i < len ; ++i)
 	{
 		if (!generic_stricmp(_pluginsCommands[i]._pluginName.c_str(), pluginName))
@@ -639,6 +651,26 @@ void PluginsManager::runPluginCommand(const TCHAR *pluginName, int commandID)
 			}
 		}
 	}
+}
+
+void PluginsManager::runDelayedStartupCommands(size_t index)
+{
+	if (index >= _pluginInfos.size() || _noMoreNotification)
+		return;
+	const generic_string module = _pluginInfos[index]->_moduleName;
+	std::vector<int> commands;
+	for (auto it = _delayedStartupCommands.begin(); it != _delayedStartupCommands.end(); )
+	{
+		if (!generic_stricmp(it->first.c_str(), module.c_str()))
+		{
+			commands.push_back(it->second);
+			it = _delayedStartupCommands.erase(it);
+		}
+		else
+			++it;
+	}
+	for (const int command : commands)
+		runPluginCommand(module.c_str(), command);
 }
 
 // send the notification to a specific plugin
