@@ -4,6 +4,8 @@
 #pragma once
 #include <windows.h>
 #include <commctrl.h>
+#include <algorithm>
+#include <vector>
 #include "StartupTrace.h"
 
 class StartupNoActivate final
@@ -14,32 +16,68 @@ public:
 		if (enabled)
 		{
 			_enabled = true;
-			++depth();
-			_hook = ::SetWindowsHookEx(WH_CBT, hookProc, nullptr, ::GetCurrentThreadId());
-			_positionHook = ::SetWindowsHookEx(WH_CALLWNDPROCRET, positionHookProc, nullptr, ::GetCurrentThreadId());
-			::EnumThreadWindows(::GetCurrentThreadId(), updateSubclass, TRUE);
+			if (++depth() == 1)
+			{
+				active() = this;
+				_hook = ::SetWindowsHookEx(WH_CBT, hookProc, nullptr, ::GetCurrentThreadId());
+				::EnumThreadWindows(::GetCurrentThreadId(), updateSubclass, TRUE);
+			}
 		}
 	}
 	~StartupNoActivate()
 	{
-		if (_hook)
-			::UnhookWindowsHookEx(_hook);
-		if (_positionHook)
-			::UnhookWindowsHookEx(_positionHook);
 		if (_enabled && --depth() == 0)
+		{
+			if (_hook)
+				::UnhookWindowsHookEx(_hook);
+			if (_creationHook)
+				::UnhookWindowsHookEx(_creationHook);
 			::EnumThreadWindows(::GetCurrentThreadId(), updateSubclass, FALSE);
+			active() = nullptr;
+		}
 	}
 	StartupNoActivate(const StartupNoActivate&) = delete;
 	StartupNoActivate& operator=(const StartupNoActivate&) = delete;
 
 private:
 	HHOOK _hook = nullptr;
-	HHOOK _positionHook = nullptr;
+	HHOOK _creationHook = nullptr;
+	std::vector<HWND> _pendingCreation;
 	bool _enabled = false;
+	static StartupNoActivate*& active()
+	{
+		static thread_local StartupNoActivate* value = nullptr;
+		return value;
+	}
 	static unsigned& depth()
 	{
 		static thread_local unsigned value = 0;
 		return value;
+	}
+	void beginCreation(HWND hwnd)
+	{
+		if (std::find(_pendingCreation.begin(), _pendingCreation.end(), hwnd) == _pendingCreation.end())
+			_pendingCreation.push_back(hwnd);
+		if (!_creationHook)
+		{
+			_creationHook = ::SetWindowsHookEx(WH_CALLWNDPROCRET, creationHookProc, nullptr, ::GetCurrentThreadId());
+			startupTrace(_creationHook ? "background.creationHook.begin" : "background.creationHook.failed");
+		}
+	}
+	void finishCreation(HWND hwnd, bool succeeded)
+	{
+		auto found = std::find(_pendingCreation.begin(), _pendingCreation.end(), hwnd);
+		if (found == _pendingCreation.end())
+			return;
+		_pendingCreation.erase(found);
+		if (succeeded && !(::GetWindowLongPtr(hwnd, GWL_STYLE) & WS_CHILD))
+			updateSubclass(hwnd, TRUE);
+		if (_pendingCreation.empty() && _creationHook)
+		{
+			::UnhookWindowsHookEx(_creationHook);
+			_creationHook = nullptr;
+			startupTrace("background.creationHook.end");
+		}
 	}
 	static BOOL CALLBACK updateSubclass(HWND hwnd, LPARAM enabled)
 	{
@@ -68,6 +106,8 @@ private:
 		if (message == WM_NCDESTROY)
 			::RemoveWindowSubclass(hwnd, positionProc, subclass);
 		LRESULT result = ::DefSubclassProc(hwnd, message, wParam, lParam);
+		if (message == WM_INITDIALOG || message == WM_SHOWWINDOW)
+			tracePosition(hwnd, message, depth(), nullptr);
 		if (message == WM_WINDOWPOSCHANGING || message == WM_WINDOWPOSCHANGED)
 			tracePosition(hwnd, message, depth(), reinterpret_cast<WINDOWPOS*>(lParam));
 		if (message == WM_WINDOWPOSCHANGING && depth())
@@ -79,33 +119,28 @@ private:
 				position->flags &= ~SWP_NOZORDER;
 			}
 		}
+		if (depth() && ((message == WM_WINDOWPOSCHANGED &&
+				(reinterpret_cast<WINDOWPOS*>(lParam)->flags & SWP_SHOWWINDOW)) ||
+				(message == WM_INITDIALOG && ::IsWindowVisible(hwnd))) &&
+				!(::GetWindowLongPtr(hwnd, GWL_STYLE) & WS_CHILD))
+		{
+			// Complete the show transaction after the window's own processing.
+			::SetWindowPos(hwnd, HWND_BOTTOM, 0, 0, 0, 0,
+				SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+		}
 		return result;
 	}
-	static LRESULT CALLBACK positionHookProc(int code, WPARAM wParam, LPARAM lParam)
+	static LRESULT CALLBACK creationHookProc(int code, WPARAM wParam, LPARAM lParam)
 	{
-		if (code == HC_ACTION)
+		if (code == HC_ACTION && active())
 		{
 			auto message = reinterpret_cast<CWPRETSTRUCT*>(lParam);
-			if (((message->message == WM_WINDOWPOSCHANGED &&
-					(reinterpret_cast<WINDOWPOS*>(message->lParam)->flags & SWP_SHOWWINDOW)) ||
-					(message->message == WM_INITDIALOG && ::IsWindowVisible(message->hwnd))) &&
-				!(::GetWindowLongPtr(message->hwnd, GWL_STYLE) & WS_CHILD))
-			{
-				// A visible-on-create dialog and the modal manager can reorder it
-				// after the creation hook. Finish that show transaction at the bottom.
-				::SetWindowPos(message->hwnd, HWND_BOTTOM, 0, 0, 0, 0,
-					SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
-			}
-			if (message->message == WM_INITDIALOG || message->message == WM_SHOWWINDOW)
-			{
-				DWORD_PTR installed = 0;
-				tracePosition(message->hwnd, message->message,
-					::GetWindowSubclass(message->hwnd, positionProc, 0x4e505042, &installed), nullptr);
-			}
 			// Install after successful non-client creation, before any show call.
-			if (message->message == WM_NCCREATE && message->lResult &&
-				!(::GetWindowLongPtr(message->hwnd, GWL_STYLE) & WS_CHILD))
-				updateSubclass(message->hwnd, TRUE);
+			// The thread-wide message hook is needed only until this return.
+			if (message->message == WM_NCCREATE)
+				active()->finishCreation(message->hwnd, message->lResult != FALSE);
+			else if (message->message == WM_NCDESTROY)
+				active()->finishCreation(message->hwnd, false);
 		}
 		return ::CallNextHookEx(nullptr, code, wParam, lParam);
 	}
@@ -115,7 +150,11 @@ private:
 		{
 			auto creation = reinterpret_cast<CBT_CREATEWND*>(lParam);
 			if (!(creation->lpcs->style & WS_CHILD))
+			{
 				creation->hwndInsertAfter = HWND_BOTTOM;
+				if (active())
+					active()->beginCreation(reinterpret_cast<HWND>(wParam));
+			}
 		}
 		if (code == HCBT_ACTIVATE || code == HCBT_SETFOCUS)
 		{
