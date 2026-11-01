@@ -2492,6 +2492,8 @@ int ScintillaEditView::replaceTargetRegExMode(const TCHAR * re, int fromTargetPo
 
 void ScintillaEditView::showAutoComletion(size_t lenEntered, const TCHAR* list)
 {
+    StartupTraceScope trace("autocomplete.popup");
+	startupTrace(list && list[0] ? "autocomplete.list.nonempty" : "autocomplete.list.empty");
 	WcharMbcsConvertor& wmc = WcharMbcsConvertor::getInstance();
 	UINT cp = static_cast<UINT>(execute(SCI_GETCODEPAGE));
 	const char *listA = wmc.wchar2char(list, cp);
