@@ -1,0 +1,15 @@
+# Local research artifacts
+/tmp/
+/deps/
+/data/
+.venv/
+__pycache__/
+
+# Private machine settings and research records
+/AGENTS.md
+/plan/
+/ref/*
+!/ref/notepad-startup-analysis/
+/ref/notepad-startup-analysis/*
+!/ref/notepad-startup-analysis/README.md
+!/ref/notepad-startup-analysis/scripts/
