@@ -21,6 +21,7 @@
 #include "ToolTip.h"
 #include "Parameters.h"
 #include "localization.h"
+#include "StartupTrace.h"
 
 using namespace std;
 
@@ -131,6 +132,14 @@ void DockingCont::doDialog(bool willBeShown, bool isFloating)
 
 tTbData* DockingCont::createToolbar(tTbData data)
 {
+	// A previous floating location needs its identity and rectangle at startup,
+	// but no native controls until a panel actually moves into that container.
+	if (!isCreated())
+	{
+		doDialog(false, _isFloating);
+		reSizeToWH(_reservedFloatingRect);
+		startupTrace("dock.floating.materialized");
+	}
 	tTbData *pTbData = new tTbData;
 
 	*pTbData = data;
@@ -224,6 +233,8 @@ void DockingCont::setActiveTb(int iItem)
 
 int DockingCont::getActiveTb()
 {
+	if (!_hContTab)
+		return -1;
 	return static_cast<int32_t>(::SendMessage(_hContTab, TCM_GETCURSEL, 0, 0));
 }
 

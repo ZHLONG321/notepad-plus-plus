@@ -647,8 +647,8 @@ void DockingManager::createDockableDlg(tTbData data, int iCont, bool isVisible)
 
 				// initialize and map container id
 				pCont->init(_hInst, _hSelf);
-				pCont->doDialog(false, true);
-				pCont->reSizeToWH(data.rcFloat);
+				pCont->reserveFloatingWindow(data.rcFloat);
+				startupTrace("dock.floating.reserved");
 				_iContMap[data.iPrevCont] = static_cast<int32_t>(_vContainer.size()) - 1;
 			}
 			data.iPrevCont = _iContMap[data.iPrevCont];

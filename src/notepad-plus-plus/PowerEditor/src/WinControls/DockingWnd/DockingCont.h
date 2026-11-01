@@ -89,6 +89,18 @@ public:
 	bool isTbVis(tTbData* data);
 
 	void doDialog(bool willBeShown = true, bool isFloating = false);
+	void reserveFloatingWindow(const RECT& rc)
+	{
+		_isFloating = true;
+		_reservedFloatingRect = rc;
+	}
+	void getWindowRect(RECT& rc) const override
+	{
+		if (_isFloating && !isCreated())
+			rc = _reservedFloatingRect;
+		else
+			Window::getWindowRect(rc);
+	}
 
 	bool isFloating() {
 		return _isFloating;
@@ -119,7 +131,8 @@ public:
 
 	void setTabStyle(const BOOL & bDrawOgLine) {
 		_bDrawOgLine = bDrawOgLine;
-		RedrawWindow(_hContTab, NULL, NULL, 0);
+		if (_hContTab)
+			RedrawWindow(_hContTab, NULL, NULL, 0);
 	};
 
     virtual void destroy() {
@@ -174,6 +187,7 @@ private:
 	// handles
 	BOOL					_isActive;
 	bool					_isFloating;
+	RECT _reservedFloatingRect = {};
 	HWND					_hCaption;
 	HWND					_hContTab;
 
