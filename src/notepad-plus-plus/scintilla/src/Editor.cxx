@@ -57,6 +57,12 @@
 #include "Editor.h"
 #include "ElapsedPeriod.h"
 
+#ifdef _WIN32
+#include "../../PowerEditor/src/StartupTrace.h"
+#undef min
+#undef max
+#endif
+
 using namespace Scintilla;
 
 namespace {
@@ -5136,6 +5142,9 @@ void Editor::StartIdleStyling(bool truncatedLastStyling) {
 
 // Style for an area but bound the amount of styling to remain responsive
 void Editor::StyleAreaBounded(PRectangle rcArea, bool scrolling) {
+#ifdef _WIN32
+	StartupTraceScope trace(L"editor.styleVisibleArea");
+#endif
 	const Sci::Position posAfterArea = PositionAfterArea(rcArea);
 	const Sci::Position posAfterMax = PositionAfterMaxStyling(posAfterArea, scrolling);
 	if (posAfterMax < posAfterArea) {

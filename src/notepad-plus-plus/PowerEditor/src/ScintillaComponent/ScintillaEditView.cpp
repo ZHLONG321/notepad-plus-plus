@@ -1909,7 +1909,9 @@ void ScintillaEditView::restoreCurrentPosPreStep()
 	startupTrace("end", L"editor.chooseCaretX");
 	startupTrace("begin", L"editor.restoreTopLine");
 	int lineToShow = static_cast<int32_t>(execute(SCI_VISIBLEFROMDOCLINE, pos._firstVisibleLine));
+	startupTrace("begin", L"editor.setFirstVisibleLine");
 	execute(SCI_SETFIRSTVISIBLELINE, lineToShow);
+	startupTrace("end", L"editor.setFirstVisibleLine");
 	startupTrace("end", L"editor.restoreTopLine");
 	if (isWrap())
 	{

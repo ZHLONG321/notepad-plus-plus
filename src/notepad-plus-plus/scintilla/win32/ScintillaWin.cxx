@@ -2229,6 +2229,7 @@ void ScintillaWin::ChangeScrollPos(int barType, Sci::Position pos) {
 }
 
 void ScintillaWin::SetVerticalScrollPos() {
+	StartupTraceScope trace(L"editor.verticalScrollBar");
 	ChangeScrollPos(SB_VERT, topLine);
 }
 
