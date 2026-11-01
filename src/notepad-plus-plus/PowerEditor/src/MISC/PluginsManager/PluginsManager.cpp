@@ -19,7 +19,6 @@
 #include <dbghelp.h>
 #include <algorithm>
 #include <cinttypes>
-#include <map>
 #include "PluginsManager.h"
 #include "resource.h"
 #include "StartupTrace.h"
@@ -647,7 +646,6 @@ void PluginsManager::runPluginCommand(const TCHAR *pluginName, int commandID)
 // send the notification to a specific plugin
 void PluginsManager::notify(size_t indexPluginInfo, const SCNotification *notification)
 {
-	static thread_local std::map<size_t, std::pair<size_t, LONGLONG>> editorNotificationTotals;
 	if (indexPluginInfo >= _pluginInfos.size())
 		return;
 
@@ -661,20 +659,6 @@ void PluginsManager::notify(size_t indexPluginInfo, const SCNotification *notifi
 			const bool traceLifecycle = scNotif.nmhdr.code == NPPN_READY || scNotif.nmhdr.code == NPPN_TBMODIFICATION;
 			if (traceLifecycle) startupTrace("notification.begin", _pluginInfos[indexPluginInfo]->_moduleName.c_str());
 			const bool traceActivation = scNotif.nmhdr.code == NPPN_BUFFERACTIVATED;
-			if (traceActivation && startupTraceHandle() != INVALID_HANDLE_VALUE)
-			{
-				auto previous = editorNotificationTotals.find(indexPluginInfo);
-				if (previous != editorNotificationTotals.end())
-				{
-					LARGE_INTEGER frequency;
-					QueryPerformanceFrequency(&frequency);
-					wchar_t detail[512]{};
-					swprintf_s(detail, L"%s count=%zu ms=%.4f", _pluginInfos[indexPluginInfo]->_moduleName.c_str(),
-						previous->second.first, 1000.0 * previous->second.second / frequency.QuadPart);
-					startupTrace("editor.plugin.total", detail);
-					editorNotificationTotals.erase(previous);
-				}
-			}
 			if (traceActivation) startupTrace("activation.plugin.begin", _pluginInfos[indexPluginInfo]->_moduleName.c_str());
 			const bool traceEditor = startupTraceHandle() != INVALID_HANDLE_VALUE &&
 				(notification->nmhdr.code == SCN_MODIFIED || notification->nmhdr.code == SCN_STYLENEEDED);
@@ -685,9 +669,6 @@ void PluginsManager::notify(size_t indexPluginInfo, const SCNotification *notifi
 			{
 				QueryPerformanceCounter(&callbackEnd);
 				QueryPerformanceFrequency(&callbackFrequency);
-				auto& totals = editorNotificationTotals[indexPluginInfo];
-				++totals.first;
-				totals.second += callbackEnd.QuadPart - callbackStart.QuadPart;
 				const double milliseconds = 1000.0 * (callbackEnd.QuadPart - callbackStart.QuadPart) / callbackFrequency.QuadPart;
 				if (milliseconds >= 0.5)
 				{
