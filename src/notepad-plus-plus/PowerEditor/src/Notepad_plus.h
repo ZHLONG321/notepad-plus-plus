@@ -153,6 +153,7 @@ public:
 
 	LRESULT init(HWND hwnd, bool incremental = false);
 	void initStartupEditor(HWND hwnd);
+	void configureEditViews();
 	void applySimpleMode();
 	bool prepareStartupDocument(const TCHAR* commandLine, const CmdLineParams& params);
 	LRESULT process(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam);

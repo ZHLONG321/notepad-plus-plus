@@ -21,6 +21,16 @@ import win32_probe as win
 OUT = Path(__file__).resolve().parent
 
 
+def view_settings(editor: int) -> dict[str, Any]:
+    """Keep text placement and the selected theme stable during completion."""
+    return dict(margin_widths=[win.message(editor, 2243, i) for i in range(5)],
+                padding_left=win.message(editor, 2156),
+                current_line_visible=win.message(editor, 2095),
+                current_line_background=win.message(editor, 2097),
+                font_quality=win.message(editor, 2612),
+                line_height=win.message(editor, 2279, 0))
+
+
 def run(runtime: Path, trace: bool, resume: bool = False, scenario: str = 'main') -> None:
     folder = OUT/'measurements'/('editor-first-'+runtime.name+'-'+time.strftime('%Y%m%d-%H%M%S'))
     folder.mkdir()
@@ -94,6 +104,7 @@ def run(runtime: Path, trace: bool, resume: bool = False, scenario: str = 'main'
         report['window_rect'] = win.rect(hwnd)
         report['early_glyph_point'] = [win.message(editor, 2164, 0, 0), win.message(editor, 2165, 0, 0)]
         report['early_line_height'] = win.message(editor, 2279, 0)
+        report['early_view_settings'] = view_settings(editor)
         capture.start(hwnd, process.pid)
         # Keep a blank reference frame before posting; compositor timestamps
         # can lead callback receipt slightly, so retain two frames first.
@@ -152,6 +163,9 @@ def run(runtime: Path, trace: bool, resume: bool = False, scenario: str = 'main'
         assert all(win.message(editor, 2007, i, timeout=1500) == ord('Z') for i in range(expected_length))
         report['final_editor_rect'] = win.rect(editor, client=True)
         report['final_glyph_point'] = [win.message(editor, 2164, 0, 0), win.message(editor, 2165, 0, 0)]
+        report['final_view_settings'] = view_settings(editor)
+        assert report['early_view_settings'] == report['final_view_settings'], 'Editor settings must not change after first display'
+        assert report['early_glyph_point'] == report['final_glyph_point'], 'Text must not move during startup completion'
         assert win.message(editor, 2174, timeout=1000), 'Undo must remain available'
         win.message(editor, 2176, timeout=1000)
         # Scintilla may group consecutive characters into one undo action.
