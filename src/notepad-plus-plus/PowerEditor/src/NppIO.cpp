@@ -2386,7 +2386,15 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 			std::vector<BufferID> ordered;
 			for (const auto& file : files)
 			{
-				const auto buffer = MainFileManager.getBufferFromName(file._fileName.c_str());
+				auto buffer = MainFileManager.getBufferFromName(file._fileName.c_str());
+				if (buffer == BUFFER_INVALID)
+				{
+					generic_string path = file._fileName;
+					resolveLinkFile(path);
+					TCHAR fullpath[MAX_PATH] = {};
+					if (::GetFullPathName(path.c_str(), MAX_PATH, fullpath, nullptr))
+						buffer = MainFileManager.getBufferFromName(fullpath);
+				}
 				if (std::find(existing.begin(), existing.end(), buffer) != existing.end() &&
 					std::find(ordered.begin(), ordered.end(), buffer) == ordered.end())
 					ordered.push_back(buffer);
