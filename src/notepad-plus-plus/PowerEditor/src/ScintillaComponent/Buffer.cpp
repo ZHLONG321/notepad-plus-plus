@@ -95,6 +95,13 @@ void Buffer::doNotify(int mask)
 }
 
 
+Document Buffer::getDocument()
+{
+	if (_documentPending)
+		_pManager->materializeDocument(this);
+	return _doc;
+}
+
 void Buffer::setDirty(bool dirty)
 {
 	_isDirty = dirty;
@@ -588,7 +595,7 @@ void FileManager::closeBuffer(BufferID id, ScintillaEditView * identifier)
 
 
 // backupFileName is sentinel of backup mode: if it's not NULL, then we use it (load it). Otherwise we use filename
-BufferID FileManager::loadFile(const TCHAR * filename, Document doc, int encoding, const TCHAR *backupFileName, FILETIME fileNameTimestamp)
+BufferID FileManager::loadFile(const TCHAR * filename, Document doc, int encoding, const TCHAR *backupFileName, FILETIME fileNameTimestamp, bool deferDocument)
 {
 	bool ownDoc = false;
 	if (!doc)
@@ -619,10 +626,16 @@ BufferID FileManager::loadFile(const TCHAR * filename, Document doc, int encodin
 	loadedFileFormat._eolFormat = EolType::unknown;
 	loadedFileFormat._language = L_TEXT;
 
-	bool res = loadFileData(doc, backupFileName ? backupFileName : fullpath, data, &UnicodeConvertor, loadedFileFormat);
+	// Decode and validate the original bytes now. Inactive restored documents
+	// can postpone building Scintilla's editable storage until first access.
+	std::string pendingText;
+	deferDocument = deferDocument && ownDoc;
+	bool res = loadFileData(doc, backupFileName ? backupFileName : fullpath, data, &UnicodeConvertor, loadedFileFormat, deferDocument ? &pendingText : nullptr);
 	if (res)
 	{
 		Buffer* newBuf = new Buffer(this, _nextBufferID, doc, DOC_REGULAR, fullpath);
+		newBuf->_documentPending = deferDocument;
+		newBuf->_pendingText = std::move(pendingText);
 		BufferID id = static_cast<BufferID>(newBuf);
 		newBuf->_id = id;
 
@@ -662,6 +675,51 @@ BufferID FileManager::loadFile(const TCHAR * filename, Document doc, int encodin
 	}
 }
 
+
+void FileManager::materializeDocument(Buffer* buffer)
+{
+	if (!buffer->_documentPending)
+		return;
+	StartupTraceScope trace(L"file.materializeDocument");
+	const bool canNotify = buffer->_canNotify;
+	const bool dirty = buffer->_isDirty;
+	buffer->_canNotify = false;
+	_pscratchTilla->execute(SCI_SETDOCPOINTER, 0, buffer->_doc);
+	const bool readOnly = _pscratchTilla->execute(SCI_GETREADONLY) != 0;
+	_pscratchTilla->execute(SCI_SETREADONLY, false);
+	_pscratchTilla->execute(SCI_SETSTATUS, SC_STATUS_OK);
+	_pscratchTilla->execute(SCI_SETUNDOCOLLECTION, false);
+	_pscratchTilla->execute(SCI_ALLOCATE, buffer->_pendingText.size());
+	if (_pscratchTilla->execute(SCI_GETSTATUS) == SC_STATUS_OK)
+		_pscratchTilla->execute(SCI_APPENDTEXT, buffer->_pendingText.size(), reinterpret_cast<LPARAM>(buffer->_pendingText.data()));
+	const bool success = _pscratchTilla->execute(SCI_GETSTATUS) == SC_STATUS_OK;
+	if (!success)
+		_pscratchTilla->execute(SCI_CLEARALL);
+	_pscratchTilla->execute(SCI_EMPTYUNDOBUFFER);
+	_pscratchTilla->execute(SCI_SETSAVEPOINT);
+	_pscratchTilla->execute(SCI_SETUNDOCOLLECTION, true);
+	_pscratchTilla->execute(SCI_SETREADONLY, readOnly);
+	_pscratchTilla->execute(SCI_SETDOCPOINTER, 0, _scratchDocDefault);
+	buffer->_isDirty = dirty;
+	buffer->_canNotify = canNotify;
+	if (!success)
+		throw std::bad_alloc();
+	buffer->_documentPending = false;
+	std::string().swap(buffer->_pendingText);
+}
+
+bool FileManager::materializeNextDocument()
+{
+	for (Buffer* buffer : _buffers)
+	{
+		if (buffer->_documentPending)
+		{
+			materializeDocument(buffer);
+			return true;
+		}
+	}
+	return false;
+}
 
 bool FileManager::reloadBuffer(BufferID id)
 {
@@ -968,6 +1026,8 @@ SavingStatus FileManager::saveBuffer(BufferID id, const TCHAR * filename, bool i
 	std::lock_guard<std::mutex> lock(save_mutex);
 
 	Buffer* buffer = getBufferByID(id);
+	// Never open/truncate a destination while its source is still pending.
+	materializeDocument(buffer);
 	bool isHiddenOrSys = false;
 	DWORD attrib = 0;
 
@@ -1265,7 +1325,17 @@ LangType FileManager::detectLanguageFromTextBegining(const unsigned char *data, 
 	return L_TEXT;
 }
 
-bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data, Utf8_16_Read * unicodeConvertor, LoadedFileFormat& fileFormat)
+static void appendDecodedText(ScintillaEditView* view, std::string* pendingText, const char* text, size_t length)
+{
+	if (length == 0)
+		return;
+	if (pendingText)
+		pendingText->append(text, length);
+	else
+		view->execute(SCI_APPENDTEXT, length, reinterpret_cast<LPARAM>(text));
+}
+
+bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data, Utf8_16_Read * unicodeConvertor, LoadedFileFormat& fileFormat, std::string* pendingText)
 {
 	startupTrace("begin", L"file.read.decode");
 	startupTrace("begin", L"file.open");
@@ -1300,31 +1370,35 @@ bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data,
 
 	//Setup scratchtilla for new filedata
 	startupTrace("begin", L"file.prepareDocument");
-	_pscratchTilla->execute(SCI_SETSTATUS, SC_STATUS_OK); // reset error status
-	_pscratchTilla->execute(SCI_SETDOCPOINTER, 0, doc);
-	bool ro = _pscratchTilla->execute(SCI_GETREADONLY) != 0;
-	if (ro)
+	bool ro = false;
+	if (!pendingText)
 	{
-		_pscratchTilla->execute(SCI_SETREADONLY, false);
-	}
-	_pscratchTilla->execute(SCI_CLEARALL);
+		_pscratchTilla->execute(SCI_SETSTATUS, SC_STATUS_OK); // reset error status
+		_pscratchTilla->execute(SCI_SETDOCPOINTER, 0, doc);
+		ro = _pscratchTilla->execute(SCI_GETREADONLY) != 0;
+		if (ro)
+		{
+			_pscratchTilla->execute(SCI_SETREADONLY, false);
+		}
+		_pscratchTilla->execute(SCI_CLEARALL);
 
 
-	if (fileFormat._language < L_EXTERNAL)
-	{
-		_pscratchTilla->execute(SCI_SETLEXER, ScintillaEditView::langNames[fileFormat._language].lexerID);
-	}
-	else
-	{
-		int id = fileFormat._language - L_EXTERNAL;
-		TCHAR * name = NppParameters::getInstance().getELCFromIndex(id)._name;
-		WcharMbcsConvertor& wmc = WcharMbcsConvertor::getInstance();
-		const char *pName = wmc.wchar2char(name, CP_ACP);
-		_pscratchTilla->execute(SCI_SETLEXERLANGUAGE, 0, reinterpret_cast<LPARAM>(pName));
-	}
+		if (fileFormat._language < L_EXTERNAL)
+		{
+			_pscratchTilla->execute(SCI_SETLEXER, ScintillaEditView::langNames[fileFormat._language].lexerID);
+		}
+		else
+		{
+			int id = fileFormat._language - L_EXTERNAL;
+			TCHAR * name = NppParameters::getInstance().getELCFromIndex(id)._name;
+			WcharMbcsConvertor& wmc = WcharMbcsConvertor::getInstance();
+			const char *pName = wmc.wchar2char(name, CP_ACP);
+			_pscratchTilla->execute(SCI_SETLEXERLANGUAGE, 0, reinterpret_cast<LPARAM>(pName));
+		}
 
-	if (fileFormat._encoding != -1)
-		_pscratchTilla->execute(SCI_SETCODEPAGE, SC_CP_UTF8);
+		if (fileFormat._encoding != -1)
+			_pscratchTilla->execute(SCI_SETCODEPAGE, SC_CP_UTF8);
+	}
 	startupTrace("end", L"file.prepareDocument");
 
 	bool success = true;
@@ -1332,9 +1406,14 @@ bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data,
 	__try
 	{
 		// First allocate enough memory for the whole file (this will reduce memory copy during loading)
-		_pscratchTilla->execute(SCI_ALLOCATE, WPARAM(bufferSizeRequested));
-		if (_pscratchTilla->execute(SCI_GETSTATUS) != SC_STATUS_OK)
-			throw;
+		if (pendingText)
+			pendingText->reserve(static_cast<size_t>(bufferSizeRequested));
+		else
+		{
+			_pscratchTilla->execute(SCI_ALLOCATE, WPARAM(bufferSizeRequested));
+			if (_pscratchTilla->execute(SCI_GETSTATUS) != SC_STATUS_OK)
+				throw;
+		}
 
 		size_t lenFile = 0;
 		size_t lenConvert = 0;	//just in case conversion results in 0, but file not empty
@@ -1385,14 +1464,14 @@ bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data,
 				if (fileFormat._encoding == SC_CP_UTF8)
 				{
 					// Pass through UTF-8 (this does not check validity of characters, thus inserting a multi-byte character in two halfs is working)
-					_pscratchTilla->execute(SCI_APPENDTEXT, lenFile, reinterpret_cast<LPARAM>(data));
+					appendDecodedText(_pscratchTilla, pendingText, data, lenFile);
 				}
 				else
 				{
 					WcharMbcsConvertor& wmc = WcharMbcsConvertor::getInstance();
 					int newDataLen = 0;
 					const char *newData = wmc.encode(fileFormat._encoding, SC_CP_UTF8, data, static_cast<int32_t>(lenFile), &newDataLen, &incompleteMultibyteChar);
-					_pscratchTilla->execute(SCI_APPENDTEXT, newDataLen, reinterpret_cast<LPARAM>(newData));
+					appendDecodedText(_pscratchTilla, pendingText, newData, newDataLen);
 				}
 
 				if (format == EolType::unknown)
@@ -1401,13 +1480,13 @@ bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data,
 			else
 			{
 				lenConvert = unicodeConvertor->convert(data, lenFile);
-				_pscratchTilla->execute(SCI_APPENDTEXT, lenConvert, reinterpret_cast<LPARAM>(unicodeConvertor->getNewBuf()));
+				appendDecodedText(_pscratchTilla, pendingText, unicodeConvertor->getNewBuf(), lenConvert);
 				if (format == EolType::unknown)
 					format = getEOLFormatForm(unicodeConvertor->getNewBuf(), unicodeConvertor->getNewSize(), EolType::unknown);
 			}
 
 			startupTrace("end", L"file.convertAppend");
-			if (_pscratchTilla->execute(SCI_GETSTATUS) != SC_STATUS_OK)
+			if (!pendingText && _pscratchTilla->execute(SCI_GETSTATUS) != SC_STATUS_OK)
 				throw;
 
 			if (incompleteMultibyteChar != 0)
@@ -1452,13 +1531,16 @@ bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data,
 	}
 
 	startupTrace("begin", L"file.finishDocument");
-	_pscratchTilla->execute(SCI_EMPTYUNDOBUFFER);
-	_pscratchTilla->execute(SCI_SETSAVEPOINT);
+	if (!pendingText)
+	{
+		_pscratchTilla->execute(SCI_EMPTYUNDOBUFFER);
+		_pscratchTilla->execute(SCI_SETSAVEPOINT);
 
-	if (ro)
-		_pscratchTilla->execute(SCI_SETREADONLY, true);
+		if (ro)
+			_pscratchTilla->execute(SCI_SETREADONLY, true);
 
-	_pscratchTilla->execute(SCI_SETDOCPOINTER, 0, _scratchDocDefault);
+		_pscratchTilla->execute(SCI_SETDOCPOINTER, 0, _scratchDocDefault);
+	}
 	startupTrace("end", L"file.finishDocument");
 
 	startupTrace("end", L"file.read.decode");
@@ -1528,7 +1610,7 @@ int FileManager::getFileNameFromBuffer(BufferID id, TCHAR * fn2copy)
 int FileManager::docLength(Buffer* buffer) const
 {
 	Document curDoc = _pscratchTilla->execute(SCI_GETDOCPOINTER);
-	_pscratchTilla->execute(SCI_SETDOCPOINTER, 0, buffer->_doc);
+	_pscratchTilla->execute(SCI_SETDOCPOINTER, 0, buffer->getDocument());
 	int docLen = _pscratchTilla->getCurrentDocLen();
 	_pscratchTilla->execute(SCI_SETDOCPOINTER, 0, curDoc);
 	return docLen;
