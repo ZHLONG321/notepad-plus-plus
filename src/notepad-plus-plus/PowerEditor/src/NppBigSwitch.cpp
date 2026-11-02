@@ -610,6 +610,12 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case WM_SIZE:
 		{
+			if (_startupLayoutPending)
+			{
+				startupTrace("window.layout.deferred");
+				result = TRUE;
+				break;
+			}
 			StartupTraceScope trace(L"window.layout");
 			RECT rc;
 			_pPublicInterface->getClientRect(rc);

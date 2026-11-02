@@ -223,6 +223,7 @@ public:
 
     void loadLastSession();
 	bool loadSession(Session & session, bool isSnapshotMode = false, bool shouldLoadFileBrowser = false);
+	void commitStartupLayout();
 
 	void prepareBufferChangedDialog(Buffer * buffer);
 	void notifyBufferChanged(Buffer * buffer, int mask);
@@ -267,6 +268,8 @@ public:
 	void refreshDarkMode(bool resetStyle = false);
 
 private:
+	// Restore the model first, then lay out its final tabs and panels once.
+	bool _startupLayoutPending = true;
 	Notepad_plus_Window *_pPublicInterface = nullptr;
     Window *_pMainWindow = nullptr;
 	DockingManager _dockingManager;

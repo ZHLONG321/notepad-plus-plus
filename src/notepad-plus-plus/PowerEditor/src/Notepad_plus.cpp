@@ -4030,6 +4030,13 @@ bool Notepad_plus::isEmpty()
 	return isEmpty;
 }
 
+void Notepad_plus::commitStartupLayout()
+{
+	// Visible child layout is committed before the initial surface is exposed.
+	_startupLayoutPending = false;
+	::SendMessage(_pPublicInterface->getHSelf(), WM_SIZE, SIZE_RESTORED, 0);
+}
+
 void Notepad_plus::loadBufferIntoView(BufferID id, int whichOne, bool dontClose)
 {
 	DocTabView * tabToOpen = (whichOne == MAIN_VIEW)?&_mainDocTab:&_subDocTab;

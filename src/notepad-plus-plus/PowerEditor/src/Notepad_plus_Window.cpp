@@ -238,6 +238,7 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 	// Present only after layout, files and saved panels have been restored.
 	if (nppParams.doFunctionListExport() || nppParams.doPrintAndExit())
 	{
+		_notepad_plus_plus_core.commitStartupLayout();
 		::ShowWindow(_hSelf, SW_HIDE);
 	}
 	else if (!cmdLineParams->_isPreLaunch)
@@ -265,12 +266,12 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 			startupTrace("end", L"window.showWithoutActivation");
 			// Show-only SetWindowPos need not send WM_SIZE. Child layout uses
 			// effective visibility, so run it after showing and before painting.
-			::SendMessage(_hSelf, WM_SIZE, SIZE_RESTORED, 0);
 		}
 		else if (cmdLineParams->isPointValid())
 			::ShowWindow(_hSelf, SW_SHOW);
 		else
 			::ShowWindow(_hSelf, nppGUI._isMaximized ? SW_MAXIMIZE : SW_SHOW);
+		_notepad_plus_plus_core.commitStartupLayout();
 		// Paint the themed client and children before READY handlers can block
 		// the UI thread. Otherwise DWM can expose their unpainted white surfaces.
 		startupTrace("begin", L"window.initialRedraw");
@@ -303,6 +304,7 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 	}
 	else
 	{
+		_notepad_plus_plus_core.commitStartupLayout();
 		_notepad_plus_plus_core._pTrayIco = new trayIconControler(_hSelf, IDI_M30ICON, NPPM_INTERNAL_MINIMIZED_TRAY, ::LoadIcon(_hInst, MAKEINTRESOURCE(IDI_M30ICON)), TEXT(""));
 		_notepad_plus_plus_core._pTrayIco->doTrayIcon(ADD);
 	}
