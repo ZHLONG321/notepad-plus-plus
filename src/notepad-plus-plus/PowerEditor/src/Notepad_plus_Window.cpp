@@ -473,10 +473,6 @@ void Notepad_plus_Window::loadOneDelayedPlugin()
 	_delayedLoadInProgress = true;
 	struct ResetBusy { bool& busy; ~ResetBusy() { busy = false; } } resetBusy{_delayedLoadInProgress};
 	StartupNoActivate noActivate(_startupNoActivate);
-	// Drain restored document storage one file per input-idle turn. Plugins
-	// receive their existing file-open replay only after every source is ready.
-	if (MainFileManager.materializeNextDocument())
-		return;
 	auto& params = NppParameters::getInstance();
 	const auto priorShortcuts = params.getPluginCommandList();
 	const int index = manager.loadNextDelayedPlugin();

@@ -162,7 +162,7 @@ void resolveLinkFile(generic_string& linkFilePath)
 	}
 }
 
-BufferID Notepad_plus::doOpen(const generic_string& fileName, bool isRecursive, bool isReadOnly, int encoding, const TCHAR *backupFileName, FILETIME fileNameTimestamp, bool deferDocument)
+BufferID Notepad_plus::doOpen(const generic_string& fileName, bool isRecursive, bool isReadOnly, int encoding, const TCHAR *backupFileName, FILETIME fileNameTimestamp)
 {
 	const rsize_t longFileNameBufferSize = MAX_PATH; // TODO stop using fixed-size buffer
 	if (fileName.size() >= longFileNameBufferSize - 1) // issue with all other sub-routines
@@ -337,7 +337,7 @@ BufferID Notepad_plus::doOpen(const generic_string& fileName, bool isRecursive, 
 	BufferID buffer;
 	if (isSnapshotMode)
 	{
-		buffer = MainFileManager.loadFile(longFileName, NULL, encoding, backupFileName, fileNameTimestamp, deferDocument);
+		buffer = MainFileManager.loadFile(longFileName, NULL, encoding, backupFileName, fileNameTimestamp);
 
 		if (buffer != BUFFER_INVALID)
 		{
@@ -357,7 +357,7 @@ BufferID Notepad_plus::doOpen(const generic_string& fileName, bool isRecursive, 
 	}
 	else
 	{
-		buffer = MainFileManager.loadFile(longFileName, NULL, encoding, nullptr, {}, deferDocument);
+		buffer = MainFileManager.loadFile(longFileName, NULL, encoding);
 	}
 
 	startupTrace("file.open.after.read");
@@ -1980,11 +1980,11 @@ void Notepad_plus::loadLastSession()
 	Session lastSession = nppParams.getSession();
 	bool isSnapshotMode = nppGui.isSnapshotMode();
 	_isFolding = true;
-    loadSession(lastSession, isSnapshotMode, false, _pluginsManager.getLoadedPluginNames().empty());
+    loadSession(lastSession, isSnapshotMode);
 	_isFolding = false;
 }
 
-bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shouldLoadFileBrowser, bool deferDocuments)
+bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shouldLoadFileBrowser)
 {
 	startupTrace("session.restore.begin");
 	NppParameters& nppParam = NppParameters::getInstance();
@@ -1999,7 +1999,6 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 	for (size_t i = 0; i < session.nbMainFiles() ; )
 	{
 		startupTrace("session.main.file.begin");
-		const bool deferDocument = deferDocuments && i != session._activeMainIndex;
 		const TCHAR *pFn = session._mainViewFiles[i]._fileName.c_str();
 
 		if (isFileSession(pFn) || isFileWorkspace(pFn))
@@ -2018,13 +2017,13 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 		if (PathFileExists(pFn))
 		{
 			if (isSnapshotMode && session._mainViewFiles[i]._backupFilePath != TEXT(""))
-				lastOpened = doOpen(pFn, false, false, session._mainViewFiles[i]._encoding, session._mainViewFiles[i]._backupFilePath.c_str(), session._mainViewFiles[i]._originalFileLastModifTimestamp, deferDocument);
+				lastOpened = doOpen(pFn, false, false, session._mainViewFiles[i]._encoding, session._mainViewFiles[i]._backupFilePath.c_str(), session._mainViewFiles[i]._originalFileLastModifTimestamp);
 			else
-				lastOpened = doOpen(pFn, false, false, session._mainViewFiles[i]._encoding, nullptr, {}, deferDocument);
+				lastOpened = doOpen(pFn, false, false, session._mainViewFiles[i]._encoding);
 		}
 		else if (isSnapshotMode && PathFileExists(session._mainViewFiles[i]._backupFilePath.c_str()))
 		{
-			lastOpened = doOpen(pFn, false, false, session._mainViewFiles[i]._encoding, session._mainViewFiles[i]._backupFilePath.c_str(), session._mainViewFiles[i]._originalFileLastModifTimestamp, deferDocument);
+			lastOpened = doOpen(pFn, false, false, session._mainViewFiles[i]._encoding, session._mainViewFiles[i]._backupFilePath.c_str(), session._mainViewFiles[i]._originalFileLastModifTimestamp);
 		}
 		else
 		{
@@ -2107,7 +2106,6 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 
 	for (size_t k = 0 ; k < session.nbSubFiles() ; )
 	{
-		const bool deferDocument = deferDocuments && k != session._activeSubIndex;
 		const TCHAR *pFn = session._subViewFiles[k]._fileName.c_str();
 
 		if (isFileSession(pFn) || isFileWorkspace(pFn))
@@ -2126,9 +2124,9 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 		if (PathFileExists(pFn))
 		{
 			if (isSnapshotMode && session._subViewFiles[k]._backupFilePath != TEXT(""))
-				lastOpened = doOpen(pFn, false, false, session._subViewFiles[k]._encoding, session._subViewFiles[k]._backupFilePath.c_str(), session._subViewFiles[k]._originalFileLastModifTimestamp, deferDocument);
+				lastOpened = doOpen(pFn, false, false, session._subViewFiles[k]._encoding, session._subViewFiles[k]._backupFilePath.c_str(), session._subViewFiles[k]._originalFileLastModifTimestamp);
 			else
-				lastOpened = doOpen(pFn, false, false, session._subViewFiles[k]._encoding, nullptr, {}, deferDocument);
+				lastOpened = doOpen(pFn, false, false, session._subViewFiles[k]._encoding);
 
 			//check if already open in main. If so, clone
 			if (_mainDocTab.getIndexByBuffer(lastOpened) != -1)
@@ -2138,7 +2136,7 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 		}
 		else if (isSnapshotMode && PathFileExists(session._subViewFiles[k]._backupFilePath.c_str()))
 		{
-			lastOpened = doOpen(pFn, false, false, session._subViewFiles[k]._encoding, session._subViewFiles[k]._backupFilePath.c_str(), session._subViewFiles[k]._originalFileLastModifTimestamp, deferDocument);
+			lastOpened = doOpen(pFn, false, false, session._subViewFiles[k]._encoding, session._subViewFiles[k]._backupFilePath.c_str(), session._subViewFiles[k]._originalFileLastModifTimestamp);
 		}
 		else
 		{
