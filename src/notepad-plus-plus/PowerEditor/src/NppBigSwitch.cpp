@@ -104,7 +104,7 @@ LRESULT Notepad_plus_Window::runProc(HWND hwnd, UINT message, WPARAM wParam, LPA
 		}
 		// These requests need the full owner. Process the original message only
 		// after completion, so borrowed COPYDATA/drop payloads remain valid.
-		if (message == WM_COMMAND || message == NPPM_MENUCOMMAND || message == WM_CLOSE ||
+		if ((message == WM_COMMAND && !lParam) || message == NPPM_MENUCOMMAND || message == WM_CLOSE ||
 			message == WM_QUERYENDSESSION || message == WM_COPYDATA || message == WM_DROPFILES ||
 			message == WM_CONTEXTMENU)
 			finishStartup();
@@ -184,6 +184,10 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 {
 	if (_startupEditorOnly)
 	{
+		// Scintilla's legacy change/focus notifications are control messages,
+		// not application commands that require constructing the whole UI.
+		if (message == WM_COMMAND && lParam)
+			return 0;
 		if (message == WM_NOTIFY)
 			return notify(reinterpret_cast<SCNotification*>(lParam));
 		if (message == WM_SIZE)
