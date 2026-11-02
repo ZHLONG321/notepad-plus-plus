@@ -65,6 +65,10 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 
 	NppParameters& nppParams = NppParameters::getInstance();
 	NppGUI & nppGUI = nppParams.getNppGUI();
+	_startupParams = *cmdLineParams;
+	_startupCommandLine = cmdLine ? cmdLine : TEXT("");
+	_startupTimestamp = timestampBegin;
+	_editorFirstStartup = !_isPrelaunch && !nppParams.doFunctionListExport() && !nppParams.doPrintAndExit();
 
 	if (cmdLineParams->_isNoPlugin)
 		_notepad_plus_plus_core._pluginsManager.disable();
@@ -90,8 +94,6 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 
 
 	startupTrace("window.created");
-
-	_notepad_plus_plus_core.staticCheckMenuAndTB();
 
 	gNppHWND = _hSelf;
 
@@ -121,6 +123,42 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		//SetWindowPlacement will take care of situations, where saved position was in no longer available monitor
 		::SetWindowPlacement(_hSelf,&posInfo);
 	}
+
+	if (_editorFirstStartup && _notepad_plus_plus_core.prepareStartupDocument(cmdLine, *cmdLineParams))
+	{
+		if (!cmdLineParams->_noActivate)
+			noActivate.finish();
+		presentStartupWindow(true);
+		_lastInputTick = ::GetTickCount();
+		_startupTimer = reinterpret_cast<UINT_PTR>(this) + 1;
+		if (::SetTimer(_hSelf, _startupTimer, 25, nullptr))
+			return;
+		_startupTimer = 0;
+	}
+	finishStartup();
+}
+
+void Notepad_plus_Window::finishStartup()
+{
+	if (_startupTimer)
+	{
+		::KillTimer(_hSelf, _startupTimer);
+		_startupTimer = 0;
+	}
+	startupTrace("startup.completion.begin");
+	StartupNoActivate noActivate(true);
+	CmdLineParams* cmdLineParams = &_startupParams;
+	const TCHAR* cmdLine = _startupCommandLine.c_str();
+	time_t timestampBegin = _startupTimestamp;
+	auto& nppParams = NppParameters::getInstance();
+	auto& nppGUI = nppParams.getNppGUI();
+	if (_editorFirstStartup)
+	{
+		_notepad_plus_plus_core._pEditView->saveCurrentPos();
+		// WM_CREATE already made the real editors. Complete their existing owner.
+		_notepad_plus_plus_core.init(_hSelf);
+	}
+	_notepad_plus_plus_core.staticCheckMenuAndTB();
 
 	if ((nppGUI._tabStatus & TAB_MULTILINE) != 0)
 		::SendMessage(_hSelf, WM_COMMAND, IDM_VIEW_DRAWTABBAR_MULTILINE, 0);
@@ -248,64 +286,14 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 	}
 	else if (!cmdLineParams->_isPreLaunch)
 	{
-		// Avoid exposing an animated, only partly composed startup surface.
-		// Resolve optionally so systems without DWM keep the original path.
-		HMODULE dwm = ::LoadLibraryExW(L"dwmapi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-		using SetAttribute = HRESULT(WINAPI*)(HWND, DWORD, LPCVOID, DWORD);
-		using FlushComposition = HRESULT(WINAPI*)();
-		auto setAttribute = dwm ? reinterpret_cast<SetAttribute>(::GetProcAddress(dwm, "DwmSetWindowAttribute")) : nullptr;
-		BOOL disableTransition = TRUE;
-		bool transitionDisabled = setAttribute && SUCCEEDED(setAttribute(_hSelf,
-			DWMWA_TRANSITIONS_FORCEDISABLED, &disableTransition, sizeof(disableTransition)));
-		// Keep the initial surface composed but off screen while visible child
-		// layout and painting run. Otherwise DWM may publish a partial redraw
-		// between two child windows even though RedrawWindow is synchronous.
-		BOOL cloak = TRUE;
-		bool startupCloaked = setAttribute && SUCCEEDED(setAttribute(_hSelf,
-			DWMWA_CLOAK, &cloak, sizeof(cloak)));
-		if (cmdLineParams->_noActivate)
+		if (_editorFirstStartup && ::IsWindowVisible(_hSelf))
 		{
-			startupTrace("begin", L"window.showWithoutActivation");
-			::SetWindowPos(_hSelf, HWND_BOTTOM, 0, 0, 0, 0,
-				SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-			startupTrace("end", L"window.showWithoutActivation");
-			// Show-only SetWindowPos need not send WM_SIZE. Child layout uses
-			// effective visibility, so run it after showing and before painting.
+			_notepad_plus_plus_core.commitStartupLayout();
+			::RedrawWindow(_hSelf, nullptr, nullptr,
+				RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW);
 		}
-		else if (cmdLineParams->isPointValid())
-			::ShowWindow(_hSelf, SW_SHOW);
 		else
-			::ShowWindow(_hSelf, nppGUI._isMaximized ? SW_MAXIMIZE : SW_SHOW);
-		_notepad_plus_plus_core.commitStartupLayout();
-		// Paint the themed client and children before READY handlers can block
-		// the UI thread. Otherwise DWM can expose their unpainted white surfaces.
-		startupTrace("begin", L"window.initialRedraw");
-		::RedrawWindow(_hSelf, nullptr, nullptr,
-			RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW);
-		startupTrace("end", L"window.initialRedraw");
-		if (startupCloaked)
-		{
-			startupTrace("begin", L"window.flushGDI");
-			::GdiFlush();
-			startupTrace("end", L"window.flushGDI");
-			cloak = FALSE;
-			startupTrace("begin", L"window.uncloak");
-			setAttribute(_hSelf, DWMWA_CLOAK, &cloak, sizeof(cloak));
-			startupTrace("end", L"window.uncloak");
-			startupTrace("window.surface.uncloaked");
-		}
-		if (transitionDisabled)
-		{
-			auto flush = reinterpret_cast<FlushComposition>(::GetProcAddress(dwm, "DwmFlush"));
-			if (flush)
-				flush();
-			// Later minimize, restore and maximize animations retain their default.
-			disableTransition = FALSE;
-			setAttribute(_hSelf, DWMWA_TRANSITIONS_FORCEDISABLED, &disableTransition, sizeof(disableTransition));
-		}
-		if (dwm)
-			::FreeLibrary(dwm);
-		startupTrace("window.present.committed");
+			presentStartupWindow(false);
 	}
 	else
 	{
@@ -412,12 +400,82 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 
 	// Make this call later to take effect
 	::SendMessage(_hSelf, NPPM_INTERNAL_SETWORDCHARS, 0, 0);
+	_notepad_plus_plus_core._startupDocument = BUFFER_INVALID;
+	startupTrace("startup.completion.end");
 
 	if (nppParams.doFunctionListExport())
 		::SendMessage(_hSelf, NPPM_INTERNAL_EXPORTFUNCLISTANDQUIT, 0, 0);
 
 	if (nppParams.doPrintAndExit())
 		::SendMessage(_hSelf, NPPM_INTERNAL_PRNTANDQUIT, 0, 0);
+}
+
+
+void Notepad_plus_Window::presentStartupWindow(bool editorOnly)
+{
+	const auto* cmdLineParams = &_startupParams;
+	const auto& nppGUI = NppParameters::getInstance().getNppGUI();
+	// Avoid exposing an animated, only partly composed startup surface.
+	// Resolve optionally so systems without DWM keep the original path.
+	HMODULE dwm = ::LoadLibraryExW(L"dwmapi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+	using SetAttribute = HRESULT(WINAPI*)(HWND, DWORD, LPCVOID, DWORD);
+	using FlushComposition = HRESULT(WINAPI*)();
+	auto setAttribute = dwm ? reinterpret_cast<SetAttribute>(::GetProcAddress(dwm, "DwmSetWindowAttribute")) : nullptr;
+	BOOL disableTransition = TRUE;
+	bool transitionDisabled = setAttribute && SUCCEEDED(setAttribute(_hSelf,
+		DWMWA_TRANSITIONS_FORCEDISABLED, &disableTransition, sizeof(disableTransition)));
+	// Keep the initial surface composed but off screen while visible child
+	// layout and painting run. Otherwise DWM may publish a partial redraw
+	// between two child windows even though RedrawWindow is synchronous.
+	BOOL cloak = TRUE;
+	bool startupCloaked = setAttribute && SUCCEEDED(setAttribute(_hSelf,
+		DWMWA_CLOAK, &cloak, sizeof(cloak)));
+	if (cmdLineParams->_noActivate)
+	{
+		startupTrace("begin", L"window.showWithoutActivation");
+		::SetWindowPos(_hSelf, HWND_BOTTOM, 0, 0, 0, 0,
+			SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+		startupTrace("end", L"window.showWithoutActivation");
+		// Show-only SetWindowPos need not send WM_SIZE. Child layout uses
+		// effective visibility, so run it after showing and before painting.
+	}
+	else if (cmdLineParams->isPointValid())
+		::ShowWindow(_hSelf, SW_SHOW);
+	else
+		::ShowWindow(_hSelf, nppGUI._isMaximized ? SW_MAXIMIZE : SW_SHOW);
+	if (editorOnly)
+		::SendMessage(_hSelf, WM_SIZE, SIZE_RESTORED, 0);
+	else
+		_notepad_plus_plus_core.commitStartupLayout();
+	// Paint the themed client and children before READY handlers can block
+	// the UI thread. Otherwise DWM can expose their unpainted white surfaces.
+	startupTrace("begin", L"window.initialRedraw");
+	::RedrawWindow(_hSelf, nullptr, nullptr,
+		RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW);
+	startupTrace("end", L"window.initialRedraw");
+	if (startupCloaked)
+	{
+		startupTrace("begin", L"window.flushGDI");
+		::GdiFlush();
+		startupTrace("end", L"window.flushGDI");
+		cloak = FALSE;
+		startupTrace("begin", L"window.uncloak");
+		setAttribute(_hSelf, DWMWA_CLOAK, &cloak, sizeof(cloak));
+		startupTrace("end", L"window.uncloak");
+		startupTrace("window.surface.uncloaked");
+	}
+	if (transitionDisabled)
+	{
+		auto flush = reinterpret_cast<FlushComposition>(::GetProcAddress(dwm, "DwmFlush"));
+		if (flush)
+			flush();
+		// Later minimize, restore and maximize animations retain their default.
+		disableTransition = FALSE;
+		setAttribute(_hSelf, DWMWA_TRANSITIONS_FORCEDISABLED, &disableTransition, sizeof(disableTransition));
+	}
+	if (dwm)
+		::FreeLibrary(dwm);
+	startupTrace("window.present.committed");
 }
 
 

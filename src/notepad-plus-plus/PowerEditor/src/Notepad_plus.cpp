@@ -191,6 +191,34 @@ Notepad_plus::~Notepad_plus()
 	delete _pFileBrowser;
 }
 
+void Notepad_plus::initStartupEditor(HWND hwnd)
+{
+	_startupEditorOnly = true;
+	_pEditView = &_mainEditView;
+	_pNonEditView = &_subEditView;
+	_mainEditView.init(_pPublicInterface->getHinst(), hwnd);
+	_subEditView.init(_pPublicInterface->getHinst(), hwnd);
+	_fileEditView.init(_pPublicInterface->getHinst(), hwnd);
+	MainFileManager.init(this, &_fileEditView);
+	_mainWindowStatus = WindowMainActive;
+	_activeView = MAIN_VIEW;
+	_mainMenuHandle = ::GetMenu(hwnd);
+	::SetMenu(hwnd, nullptr);
+	const auto& svp = NppParameters::getInstance().getSVP();
+	for (auto* view : {&_mainEditView, &_subEditView})
+	{
+		view->performGlobalStyles();
+		view->setWrapMode(svp._lineWrapMethod);
+		view->wrap(svp._doWrap);
+		view->execute(SCI_SETADDITIONALSELECTIONTYPING, true);
+		view->execute(SCI_SETVIRTUALSPACEOPTIONS, SCVS_RECTANGULARSELECTION);
+		view->execute(SCI_SETMULTIPASTE, SC_MULTIPASTE_EACH);
+	}
+	_mainEditView.execute(SCI_SETZOOM, svp._zoom);
+	_subEditView.execute(SCI_SETZOOM, svp._zoom2);
+	startupTrace("startup.editor.created");
+}
+
 LRESULT Notepad_plus::init(HWND hwnd)
 {
 	startupTrace("core.init.begin");
@@ -198,7 +226,10 @@ LRESULT Notepad_plus::init(HWND hwnd)
 	NppGUI & nppGUI = nppParam.getNppGUI();
 
 	// Menu
-	_mainMenuHandle = ::GetMenu(hwnd);
+	if (_startupEditorOnly)
+		::SetMenu(hwnd, _mainMenuHandle);
+	else
+		_mainMenuHandle = ::GetMenu(hwnd);
 	int langPos2BeRemoved = MENUINDEX_LANGUAGE + 1;
 	if (nppGUI._isLangMenuCompact)
 		langPos2BeRemoved = MENUINDEX_LANGUAGE;
@@ -210,11 +241,13 @@ LRESULT Notepad_plus::init(HWND hwnd)
 	_pNonDocTab = &_subDocTab;
 	_pNonEditView = &_subEditView;
 
-	_mainEditView.init(_pPublicInterface->getHinst(), hwnd);
-	_subEditView.init(_pPublicInterface->getHinst(), hwnd);
-
-	_fileEditView.init(_pPublicInterface->getHinst(), hwnd);
-	MainFileManager.init(this, &_fileEditView); //get it up and running asap.
+	if (!_startupEditorOnly)
+	{
+		_mainEditView.init(_pPublicInterface->getHinst(), hwnd);
+		_subEditView.init(_pPublicInterface->getHinst(), hwnd);
+		_fileEditView.init(_pPublicInterface->getHinst(), hwnd);
+		MainFileManager.init(this, &_fileEditView); //get it up and running asap.
+	}
 	startupTrace("core.scintillas.ready");
 
 	nppParam.setFontList(hwnd);
@@ -741,6 +774,7 @@ LRESULT Notepad_plus::init(HWND hwnd)
 
 	//Load initial docs into doctab
 	startupTrace("core.docking.ready");
+	_startupEditorOnly = false;
 	loadBufferIntoView(_mainEditView.getCurrentBufferID(), MAIN_VIEW);
 	loadBufferIntoView(_subEditView.getCurrentBufferID(), SUB_VIEW);
 	startupTrace("buffers.loaded");
@@ -5850,10 +5884,14 @@ void Notepad_plus::prepareBufferChangedDialog(Buffer * buffer)
 
 void Notepad_plus::notifyBufferChanged(Buffer * buffer, int mask)
 {
-	// To avoid to crash while MS-DOS style is set as default language,
-	// Checking the validity of current instance is necessary.
+	// Initial Scintilla documents precede FileManager::init.
 	if (!this) return;
-
+	if (_startupEditorOnly)
+	{
+		_mainEditView.bufferUpdated(buffer, mask);
+		_subEditView.bufferUpdated(buffer, mask);
+		return;
+	}
 	NppParameters& nppParam = NppParameters::getInstance();
 	const NppGUI & nppGUI = nppParam.getNppGUI();
 
@@ -6136,6 +6174,8 @@ std::vector<generic_string> Notepad_plus::loadCommandlineParams(const TCHAR * co
 			continue;
 
 		lastOpened = bufID;
+		if (bufID == _startupDocument)
+			continue; // Command-line position and language preceded the first edit.
 		Buffer* pBuf = MainFileManager.getBufferByID(bufID);
 
 		if (!udl.empty())

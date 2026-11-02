@@ -39,6 +39,25 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 	}
 	if (startupInputSeen && notification->nmhdr.code == SCN_PAINTED)
 		startupTrace("editor.input_painted");
+	if (_startupEditorOnly)
+	{
+		auto* view = notification->nmhdr.hwndFrom == _mainEditView.getHSelf() ? &_mainEditView :
+			(notification->nmhdr.hwndFrom == _subEditView.getHSelf() ? &_subEditView : nullptr);
+		if (!view || !view->getCurrentBuffer())
+			return FALSE;
+		auto* buffer = view->getCurrentBuffer();
+		if (notification->nmhdr.code == SCN_SAVEPOINTLEFT || notification->nmhdr.code == SCN_SAVEPOINTREACHED)
+			buffer->setDirty(notification->nmhdr.code == SCN_SAVEPOINTLEFT || buffer->isLoadedDirty());
+		if (notification->nmhdr.code == SCN_MODIFIED &&
+			(notification->modificationType & (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT)))
+			buffer->setModifiedStatus(true);
+		if (notification->nmhdr.code == SCN_PAINTED)
+		{
+			view->restoreCurrentPosPostStep();
+			_pPublicInterface->onEditorPainted();
+		}
+		return TRUE;
+	}
 	//Important, keep track of which element generated the message
 	bool isFromPrimary = (_mainEditView.getHSelf() == notification->nmhdr.hwndFrom || _mainDocTab.getHSelf() == notification->nmhdr.hwndFrom);
 	bool isFromSecondary = !isFromPrimary && (_subEditView.getHSelf() == notification->nmhdr.hwndFrom || _subDocTab.getHSelf() == notification->nmhdr.hwndFrom);

@@ -152,6 +152,8 @@ public:
 	~Notepad_plus();
 
 	LRESULT init(HWND hwnd);
+	void initStartupEditor(HWND hwnd);
+	bool prepareStartupDocument(const TCHAR* commandLine, const CmdLineParams& params);
 	LRESULT process(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam);
 	void killAllChildren();
 
@@ -270,6 +272,10 @@ public:
 private:
 	// Restore the model first, then lay out its final tabs and panels once.
 	bool _startupLayoutPending = true;
+	bool _startupEditorOnly = false;
+	BufferID _startupDocument = BUFFER_INVALID;
+	int _startupDocumentView = MAIN_VIEW;
+	bool _startupDocumentAnnounced = false;
 	Notepad_plus_Window *_pPublicInterface = nullptr;
     Window *_pMainWindow = nullptr;
 	DockingManager _dockingManager;

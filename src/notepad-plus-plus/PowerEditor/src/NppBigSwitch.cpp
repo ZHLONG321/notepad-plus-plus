@@ -93,6 +93,22 @@ LRESULT CALLBACK Notepad_plus_Window::Notepad_plus_Proc(HWND hwnd, UINT message,
 
 LRESULT Notepad_plus_Window::runProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+	if (_startupTimer)
+	{
+		if (message == WM_TIMER && wParam == _startupTimer)
+		{
+			if (_startupEditorPainted && ::GetTickCount() - _lastInputTick >= 250 &&
+				!HIWORD(::GetQueueStatus(QS_INPUT | QS_PAINT)))
+				finishStartup();
+			return 0;
+		}
+		// These requests need the full owner. Process the original message only
+		// after completion, so borrowed COPYDATA/drop payloads remain valid.
+		if (message == WM_COMMAND || message == NPPM_MENUCOMMAND || message == WM_CLOSE ||
+			message == WM_QUERYENDSESSION || message == WM_COPYDATA || message == WM_DROPFILES ||
+			message == WM_CONTEXTMENU)
+			finishStartup();
+	}
 	switch (message)
 	{
 		case WM_CREATE:
@@ -102,7 +118,11 @@ LRESULT Notepad_plus_Window::runProc(HWND hwnd, UINT message, WPARAM wParam, LPA
 				NppDarkMode::setDarkTitleBar(hwnd);
 
 				_notepad_plus_plus_core._pPublicInterface = this;
-				LRESULT lRet = _notepad_plus_plus_core.init(hwnd);
+				LRESULT lRet = TRUE;
+				if (_editorFirstStartup)
+					_notepad_plus_plus_core.initStartupEditor(hwnd);
+				else
+					lRet = _notepad_plus_plus_core.init(hwnd);
 
 				if (NppDarkMode::isEnabled() && NppDarkMode::isExperimentalSupported())
 				{
@@ -162,6 +182,28 @@ int CharacterIs(TCHAR c, const TCHAR *any)
 
 LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+	if (_startupEditorOnly)
+	{
+		if (message == WM_NOTIFY)
+			return notify(reinterpret_cast<SCNotification*>(lParam));
+		if (message == WM_SIZE)
+		{
+			RECT rc = {};
+			::GetClientRect(hwnd, &rc);
+			if (_pEditView && _pEditView->getHSelf())
+				::SetWindowPos(_pEditView->getHSelf(), nullptr, 0, 0, rc.right, rc.bottom,
+					SWP_NOZORDER | SWP_NOACTIVATE);
+			return 0;
+		}
+		if (message == WM_ACTIVATE || message == WM_SETFOCUS)
+		{
+			if ((message == WM_SETFOCUS || LOWORD(wParam) != WA_INACTIVE) && _pEditView)
+				::SetFocus(_pEditView->getHSelf());
+			return 0;
+		}
+		if (message == WM_ACTIVATEAPP || message == NPPM_INTERNAL_CHECKDOCSTATUS)
+			return 0;
+	}
 	LRESULT result = FALSE;
 	NppParameters& nppParam = NppParameters::getInstance();
 

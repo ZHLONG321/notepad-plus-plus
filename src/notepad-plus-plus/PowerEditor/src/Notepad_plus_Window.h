@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 #include "Notepad_plus.h"
+#include <ctime>
 
 const int splitterSize = 8;
 
@@ -63,6 +64,10 @@ public:
 	bool isDlgsMsg(MSG *msg) const;
 	void onEditorPainted() { _startupEditorPainted = true; }
 	void onInputMessage(const MSG& msg) {
+		// Resolve configured application shortcuts before translating this key.
+		if (_startupTimer && (msg.message == WM_KEYDOWN || msg.message == WM_SYSKEYDOWN) &&
+			((::GetKeyState(VK_CONTROL) & 0x8000) || (::GetKeyState(VK_MENU) & 0x8000)))
+			finishStartup();
 		if ((msg.message >= WM_KEYFIRST && msg.message <= WM_KEYLAST) ||
 			(msg.message >= WM_MOUSEFIRST && msg.message <= WM_MOUSELAST) ||
 			(msg.message >= WM_NCMOUSEMOVE && msg.message <= WM_NCXBUTTONDBLCLK))
@@ -120,6 +125,13 @@ private:
 	DWORD _lastInputTick = 0;
 	UINT_PTR _delayedPluginTimer = 0;
 	void loadOneDelayedPlugin();
+	bool _editorFirstStartup = false;
+	UINT_PTR _startupTimer = 0;
+	CmdLineParams _startupParams;
+	generic_string _startupCommandLine;
+	time_t _startupTimestamp = 0;
+	void finishStartup();
+	void presentStartupWindow(bool editorOnly);
 
 	QuoteParams _quoteParams; // keep the availability of quote parameters for thread using
 	std::wstring _userQuote; // keep the availability of this string for thread using

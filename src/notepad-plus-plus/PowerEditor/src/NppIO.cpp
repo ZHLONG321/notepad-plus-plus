@@ -29,6 +29,7 @@
 #include <tchar.h>
 #include <unordered_set>
 #include "StartupTrace.h"
+#include "FileNameStringSplitter.h"
 
 using namespace std;
 
@@ -162,6 +163,123 @@ void resolveLinkFile(generic_string& linkFilePath)
 	}
 }
 
+bool Notepad_plus::prepareStartupDocument(const TCHAR* commandLine, const CmdLineParams& params)
+{
+	auto& settings = NppParameters::getInstance();
+	const auto& gui = settings.getNppGUI();
+	FileNameStringSplitter names(commandLine ? commandLine : TEXT(""));
+	// These requests can create dialogs, expand folders, or replace a session;
+	// they need the complete command owner before accepting edits.
+	if (params._isSessionFile || !params._easterEggName.empty())
+		return false;
+	const sessionFileInfo* selected = nullptr;
+	generic_string filename;
+	int encoding = -1;
+	const TCHAR* backup = nullptr;
+	FILETIME timestamp = {};
+	if (gui._rememberLastSession && !params._isNoSession && !settings.getSession()._subViewFiles.empty() &&
+		settings.getSession()._activeView == SUB_VIEW)
+		_startupDocumentView = SUB_VIEW;
+	if (names.size() && !params._openFoldersAsWorkspace)
+	{
+		for (int i = 0; i < names.size(); ++i)
+		{
+			generic_string path = names.getFileName(i);
+			resolveLinkFile(path);
+			if (path.size() >= MAX_PATH - 1 || path.find_first_of(TEXT("*?")) != generic_string::npos ||
+				!::PathFileExists(path.c_str()) || ::PathIsDirectory(path.c_str()) ||
+				isFileSession(path.c_str()) || isFileWorkspace(path.c_str()))
+				return false;
+			filename = path;
+		}
+	}
+	else if (gui._rememberLastSession && !params._isNoSession)
+	{
+		const auto& session = settings.getSession();
+		_startupDocumentView = session._activeView == SUB_VIEW && !session._subViewFiles.empty() ? SUB_VIEW : MAIN_VIEW;
+		const auto& files = _startupDocumentView == MAIN_VIEW ? session._mainViewFiles : session._subViewFiles;
+		const size_t index = _startupDocumentView == MAIN_VIEW ? session._activeMainIndex : session._activeSubIndex;
+		if (!files.empty())
+		{
+			if (index >= files.size())
+				return false;
+			selected = &files[index];
+			filename = selected->_fileName;
+			encoding = selected->_encoding;
+			if (gui.isSnapshotMode() && ::PathFileExists(selected->_backupFilePath.c_str()))
+			{
+				backup = selected->_backupFilePath.c_str();
+				timestamp = selected->_originalFileLastModifTimestamp;
+			}
+			if (filename.size() >= MAX_PATH - 1 || isFileSession(filename.c_str()) || isFileWorkspace(filename.c_str()) ||
+				(!backup && (!::PathFileExists(filename.c_str()) || ::PathIsDirectory(filename.c_str()))))
+				return false;
+		}
+	}
+	_pEditView = _startupDocumentView == MAIN_VIEW ? &_mainEditView : &_subEditView;
+	_pNonEditView = _startupDocumentView == MAIN_VIEW ? &_subEditView : &_mainEditView;
+	_activeView = _startupDocumentView;
+	_mainWindowStatus = static_cast<UCHAR>(_startupDocumentView == MAIN_VIEW ? WindowMainActive : WindowSubActive);
+	if (!filename.empty())
+	{
+		if (encoding == -1)
+			encoding = getHtmlXmlEncoding(filename.c_str());
+		BufferID loaded = MainFileManager.loadFile(filename.c_str(), NULL, encoding, backup, timestamp);
+		if (loaded == BUFFER_INVALID)
+			return false;
+		MainFileManager.addBufferReference(loaded, _pEditView);
+		if (selected)
+		{
+			loaded->setPosition(*selected, _pEditView);
+			loaded->setMapPosition(selected->_mapPos);
+			loaded->setHeaderLineState(selected->_foldStates, _pEditView);
+			const int language = getLangFromMenuName(selected->_langName.c_str());
+			if (language && language != IDM_LANG_USER)
+				loaded->setLangType(menuID2LangType(language));
+			else if (settings.getULCFromName(selected->_langName.c_str()))
+				loaded->setLangType(L_USER, selected->_langName.c_str());
+			loaded->setUserReadOnly(selected->_isUserReadOnly);
+		}
+		else
+		{
+			loaded->setUserReadOnly(params._isReadOnly);
+			if (!params._udlName.empty())
+				loaded->setLangType(L_USER, params._udlName.c_str());
+			else if (params._langType != L_EXTERNAL && params._langType < settings.L_END)
+				loaded->setLangType(params._langType);
+		}
+		const BufferID initial = _pEditView->getCurrentBufferID();
+		_pEditView->activateBuffer(loaded);
+		MainFileManager.closeBuffer(initial, _pEditView);
+		if (backup)
+		{
+			loaded->setLoadedDirty(true);
+			loaded->setDirty(true);
+		}
+		if (selected)
+			for (auto line : selected->_marks)
+				_pEditView->execute(SCI_MARKERADD, line, MARK_BOOKMARK);
+		else if (params._pos2go >= 0 || params._line2go >= 0)
+		{
+			auto pos = params._pos2go;
+			if (pos > 0)
+				pos = static_cast<int>(_pEditView->execute(SCI_POSITIONAFTER, _pEditView->execute(SCI_POSITIONBEFORE, pos)));
+			if (pos >= 0)
+				_pEditView->execute(SCI_GOTOPOS, pos);
+			else if (params._column2go < 0)
+				_pEditView->execute(SCI_GOTOLINE, params._line2go - 1);
+			else
+				_pEditView->execute(SCI_GOTOPOS, _pEditView->execute(SCI_FINDCOLUMN, params._line2go - 1, params._column2go - 1));
+			_pEditView->scrollPosToCenter(_pEditView->execute(SCI_GETCURRENTPOS));
+		}
+		::SetWindowText(_pPublicInterface->getHSelf(), (filename + TEXT(" - Notepad++")).c_str());
+	}
+	_startupDocument = _pEditView->getCurrentBufferID();
+	_pEditView->display();
+	startupTrace("startup.editor.document.ready");
+	return true;
+}
+
 BufferID Notepad_plus::doOpen(const generic_string& fileName, bool isRecursive, bool isReadOnly, int encoding, const TCHAR *backupFileName, FILETIME fileNameTimestamp)
 {
 	const rsize_t longFileNameBufferSize = MAX_PATH; // TODO stop using fixed-size buffer
@@ -222,6 +340,33 @@ BufferID Notepad_plus::doOpen(const generic_string& fileName, bool isRecursive, 
 		foundBufID = MainFileManager.getBufferFromName(fileName2Find.c_str());
 
 	// If we found the document, then we don't open the existing doc. We return the found buffer ID instead.
+    if (foundBufID != BUFFER_INVALID && foundBufID == _startupDocument)
+    {
+        // This is the document already accepting input. Announce it once to
+        // normal plugins, retaining its document, edits, undo and backup state.
+        if (!_startupDocumentAnnounced)
+        {
+            _startupDocumentAnnounced = true;
+            SCNotification notification = {};
+            notification.nmhdr.hwndFrom = _pPublicInterface->getHSelf();
+            notification.nmhdr.code = NPPN_FILEBEFORELOAD;
+            _pluginsManager.notify(&notification);
+            notification.nmhdr.idFrom = reinterpret_cast<uptr_t>(foundBufID);
+            if (foundBufID->isLoadedDirty())
+            {
+                notification.nmhdr.hwndFrom = nullptr;
+                notification.nmhdr.code = NPPN_SNAPSHOTDIRTYFILELOADED;
+                _pluginsManager.notify(&notification);
+                notification.nmhdr.hwndFrom = _pPublicInterface->getHSelf();
+            }
+            notification.nmhdr.code = NPPN_FILEBEFOREOPEN;
+            _pluginsManager.notify(&notification);
+            loadBufferIntoView(foundBufID, currentView());
+            notification.nmhdr.code = NPPN_FILEOPENED;
+            _pluginsManager.notify(&notification);
+        }
+        return foundBufID;
+    }
     if (foundBufID != BUFFER_INVALID && !isSnapshotMode)
     {
         if (_pTrayIco)
@@ -2048,6 +2193,11 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 				typeToSet = (LangType)(id - IDM_LANG_EXTERNAL + L_EXTERNAL);
 
 			Buffer *buf = MainFileManager.getBufferByID(lastOpened);
+			if (lastOpened == _startupDocument && _startupDocumentView == MAIN_VIEW)
+			{
+				++i;
+				continue;
+			}
 
 			if (session._mainViewFiles[i]._foldStates.size() > 0)
 			{
@@ -2163,6 +2313,11 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 				typeToSet = (LangType)(id - IDM_LANG_EXTERNAL + L_EXTERNAL);
 
 			Buffer * buf = MainFileManager.getBufferByID(lastOpened);
+			if (lastOpened == _startupDocument && _startupDocumentView == SUB_VIEW)
+			{
+				++k;
+				continue;
+			}
 
 			// Set fold states
 			if (session._subViewFiles[k]._foldStates.size() > 0)
@@ -2220,6 +2375,31 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 		_isFolding = false;
 	}
 
+	if (_startupDocument != BUFFER_INVALID)
+	{
+		// The selected document was inserted before the other session files.
+		// Restore tab order without moving or copying any document storage.
+		auto orderTabs = [&](DocTabView& tabs, const std::vector<sessionFileInfo>& files) {
+			std::vector<BufferID> existing;
+			for (size_t index = 0; index < tabs.nbItem(); ++index)
+				existing.push_back(tabs.getBufferByIndex(index));
+			std::vector<BufferID> ordered;
+			for (const auto& file : files)
+			{
+				const auto buffer = MainFileManager.getBufferFromName(file._fileName.c_str());
+				if (std::find(existing.begin(), existing.end(), buffer) != existing.end() &&
+					std::find(ordered.begin(), ordered.end(), buffer) == ordered.end())
+					ordered.push_back(buffer);
+			}
+			for (auto buffer : existing)
+				if (std::find(ordered.begin(), ordered.end(), buffer) == ordered.end())
+					ordered.push_back(buffer);
+			for (size_t index = 0; index < ordered.size(); ++index)
+				tabs.setBuffer(index, ordered[index]);
+		};
+		orderTabs(_mainDocTab, session._mainViewFiles);
+		orderTabs(_subDocTab, session._subViewFiles);
+	}
 	_mainEditView.restoreCurrentPosPreStep();
 	_subEditView.restoreCurrentPosPreStep();
 
