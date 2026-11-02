@@ -573,13 +573,13 @@ namespace NppDarkMode
 		{
 			UAHMENU* pUDM = (UAHMENU*)lParam;
 			RECT rc = { 0 };
+			RECT rcWindow = { 0 };
 
 			// get the menubar rect
 			{
 				MENUBARINFO mbi = { sizeof(mbi) };
 				GetMenuBarInfo(hWnd, OBJID_MENU, 0, &mbi);
 
-				RECT rcWindow;
 				GetWindowRect(hWnd, &rcWindow);
 
 				// the rcBar is offset by the window rect
@@ -589,7 +589,26 @@ namespace NppDarkMode
 				rc.top -= 1;
 			}
 
+			// USER paints each item after this background callback. Keep its old
+			// pixels until the buffered item paint replaces background and text
+			// together; clearing the whole bar exposes an empty intermediate frame.
+			const int savedDC = ::SaveDC(pUDM->hdc);
+			if (savedDC)
+			{
+				const int count = ::GetMenuItemCount(pUDM->hmenu);
+				for (int i = 0; i < count; ++i)
+				{
+					RECT itemRect = { 0 };
+					if (::GetMenuItemRect(hWnd, pUDM->hmenu, i, &itemRect))
+					{
+						::OffsetRect(&itemRect, -rcWindow.left, -rcWindow.top);
+						::ExcludeClipRect(pUDM->hdc, itemRect.left, itemRect.top, itemRect.right, itemRect.bottom);
+					}
+				}
+			}
 			FillRect(pUDM->hdc, &rc, NppDarkMode::getDarkerBackgroundBrush());
+			if (savedDC)
+				::RestoreDC(pUDM->hdc, savedDC);
 
 			*lr = 0;
 
@@ -651,17 +670,21 @@ namespace NppDarkMode
 				g_menuTheme = OpenThemeData(hWnd, L"Menu");
 			}
 
+			BufferedPaint paint(pUDMI->um.hdc, pUDMI->dis.rcItem);
+			HDC hdc = paint.getDC();
+			HGDIOBJ font = ::GetCurrentObject(pUDMI->um.hdc, OBJ_FONT);
+			HGDIOBJ oldFont = font ? ::SelectObject(hdc, font) : nullptr;
 			if (iBackgroundStateID == MPI_NORMAL || iBackgroundStateID == MPI_DISABLED)
 			{
-				FillRect(pUDMI->um.hdc, &pUDMI->dis.rcItem, NppDarkMode::getDarkerBackgroundBrush());
+				FillRect(hdc, &pUDMI->dis.rcItem, NppDarkMode::getDarkerBackgroundBrush());
 			}
 			else if (iBackgroundStateID == MPI_HOT || iBackgroundStateID == MPI_DISABLEDHOT)
 			{
-				FillRect(pUDMI->um.hdc, &pUDMI->dis.rcItem, NppDarkMode::getHotBackgroundBrush());
+				FillRect(hdc, &pUDMI->dis.rcItem, NppDarkMode::getHotBackgroundBrush());
 			}
 			else
 			{
-				DrawThemeBackground(g_menuTheme, pUDMI->um.hdc, MENU_POPUPITEM, iBackgroundStateID, &pUDMI->dis.rcItem, nullptr);
+				DrawThemeBackground(g_menuTheme, hdc, MENU_POPUPITEM, iBackgroundStateID, &pUDMI->dis.rcItem, nullptr);
 			}
 			DTTOPTS dttopts = { sizeof(dttopts) };
 			if (iTextStateID == MPI_NORMAL || iTextStateID == MPI_HOT)
@@ -669,7 +692,9 @@ namespace NppDarkMode
 				dttopts.dwFlags |= DTT_TEXTCOLOR;
 				dttopts.crText = NppDarkMode::getTextColor();
 			}
-			DrawThemeTextEx(g_menuTheme, pUDMI->um.hdc, MENU_POPUPITEM, iTextStateID, menuString, mii.cch, dwFlags, &pUDMI->dis.rcItem, &dttopts);
+			DrawThemeTextEx(g_menuTheme, hdc, MENU_POPUPITEM, iTextStateID, menuString, mii.cch, dwFlags, &pUDMI->dis.rcItem, &dttopts);
+			if (oldFont)
+				::SelectObject(hdc, oldFont);
 
 			*lr = 0;
 
