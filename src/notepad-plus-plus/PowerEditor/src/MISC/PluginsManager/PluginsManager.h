@@ -91,7 +91,9 @@ public:
 	}
 
     int loadPlugin(const TCHAR *pluginFilePath);
-	bool loadPluginsV2(const TCHAR *dir = NULL);
+	bool loadPluginsV2(const TCHAR *dir = NULL, bool queueNormal = false);
+	bool hasNormalPlugins() const { return !_normalPlugins.empty(); }
+	void loadNextNormalPlugin();
 	bool hasDelayedPlugins() const { return !_delayedPlugins.empty() && !_noMoreNotification; }
 	int loadNextDelayedPlugin();
 	size_t getCommandStartupOrder(int commandID) const;
@@ -139,6 +141,7 @@ private:
 	bool _noMoreNotification = false;
 	std::vector<generic_string> _discoveredModules;
 	std::vector<generic_string> _delayedPlugins;
+	std::vector<generic_string> _normalPlugins;
 	std::vector<std::pair<generic_string, int>> _delayedStartupCommands;
 	size_t startupOrder(const generic_string& module) const;
 

@@ -297,7 +297,7 @@ int PluginsManager::loadPlugin(const TCHAR *pluginFilePath)
 	}
 }
 
-bool PluginsManager::loadPluginsV2(const TCHAR* dir)
+bool PluginsManager::loadPluginsV2(const TCHAR* dir, bool queueNormal)
 {
 	if (_isDisabled)
 		return false;
@@ -399,11 +399,22 @@ bool PluginsManager::loadPluginsV2(const TCHAR* dir)
 			_delayedPlugins.push_back(path);
 			startupTrace("plugin.queued", module);
 		}
+		else if (queueNormal)
+			_normalPlugins.push_back(path);
 		else
 			loadPlugin(path.c_str());
 	}
 
 	return true;
+}
+
+void PluginsManager::loadNextNormalPlugin()
+{
+	if (_normalPlugins.empty())
+		return;
+	const generic_string path = _normalPlugins.front();
+	_normalPlugins.erase(_normalPlugins.begin());
+	loadPlugin(path.c_str());
 }
 
 // return true if cmdID found and its shortcut is enable

@@ -151,7 +151,7 @@ public:
 	Notepad_plus();
 	~Notepad_plus();
 
-	LRESULT init(HWND hwnd);
+	LRESULT init(HWND hwnd, bool incremental = false);
 	void initStartupEditor(HWND hwnd);
 	bool prepareStartupDocument(const TCHAR* commandLine, const CmdLineParams& params);
 	LRESULT process(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam);
@@ -276,6 +276,8 @@ private:
 	BufferID _startupDocument = BUFFER_INVALID;
 	int _startupDocumentView = MAIN_VIEW;
 	bool _startupDocumentAnnounced = false;
+	enum class CoreInitStage { views, plugins, menus, toolbar, dialogs, done };
+	CoreInitStage _coreInitStage = CoreInitStage::views;
 	struct SessionRestoreProgress
 	{
 		bool started = false;

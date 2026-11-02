@@ -219,12 +219,16 @@ void Notepad_plus::initStartupEditor(HWND hwnd)
 	startupTrace("startup.editor.created");
 }
 
-LRESULT Notepad_plus::init(HWND hwnd)
+LRESULT Notepad_plus::init(HWND hwnd, bool incremental)
 {
-	startupTrace("core.init.begin");
+	if (_coreInitStage == CoreInitStage::done)
+		return TRUE;
 	NppParameters& nppParam = NppParameters::getInstance();
 	NppGUI & nppGUI = nppParam.getNppGUI();
 
+	if (_coreInitStage == CoreInitStage::views)
+	{
+	startupTrace("core.init.begin");
 	// Menu
 	if (_startupEditorOnly)
 		::SetMenu(hwnd, _mainMenuHandle);
@@ -236,10 +240,11 @@ LRESULT Notepad_plus::init(HWND hwnd)
 	::RemoveMenu(_mainMenuHandle, langPos2BeRemoved, MF_BYPOSITION);
 
 	//Views
-	_pDocTab = &_mainDocTab;
-	_pEditView = &_mainEditView;
-	_pNonDocTab = &_subDocTab;
-	_pNonEditView = &_subEditView;
+	const bool startInSub = _startupEditorOnly && _startupDocumentView == SUB_VIEW;
+	_pDocTab = startInSub ? &_subDocTab : &_mainDocTab;
+	_pEditView = startInSub ? &_subEditView : &_mainEditView;
+	_pNonDocTab = startInSub ? &_mainDocTab : &_subDocTab;
+	_pNonEditView = startInSub ? &_mainEditView : &_subEditView;
 
 	if (!_startupEditorOnly)
 	{
@@ -254,8 +259,8 @@ LRESULT Notepad_plus::init(HWND hwnd)
 	startupTrace("core.fonts.ready");
 
 
-	_mainWindowStatus = WindowMainActive;
-	_activeView = MAIN_VIEW;
+	_mainWindowStatus = startInSub ? WindowSubActive : WindowMainActive;
+	_activeView = startInSub ? SUB_VIEW : MAIN_VIEW;
 
 	const ScintillaViewParams & svp = nppParam.getSVP();
 
@@ -277,7 +282,7 @@ LRESULT Notepad_plus::init(HWND hwnd)
 	_mainDocTab.init(_pPublicInterface->getHinst(), hwnd, &_mainEditView, pIconListVector, indexDocTabIcon);
 	_subDocTab.init(_pPublicInterface->getHinst(), hwnd, &_subEditView, pIconListVector, indexDocTabIcon);
 
-	_mainEditView.display();
+	_pEditView->display();
 
 	_invisibleEditView.init(_pPublicInterface->getHinst(), hwnd);
 	_invisibleEditView.execute(SCI_SETUNDOCOLLECTION);
@@ -398,7 +403,8 @@ LRESULT Notepad_plus::init(HWND hwnd)
 		TabCtrl_SetItemSize(_mainDocTab.getHSelf(), tabDpiDynamicalWidth, tabDpiDynamicalHeight);
 		TabCtrl_SetItemSize(_subDocTab.getHSelf(), tabDpiDynamicalWidth, tabDpiDynamicalHeight);
 	}
-	_mainDocTab.display();
+	if (!_startupEditorOnly)
+		_mainDocTab.display();
 
 
 	TabBarPlus::doDragNDrop((tabBarStatus & TAB_DRAGNDROP) != 0);
@@ -425,7 +431,7 @@ LRESULT Notepad_plus::init(HWND hwnd)
 	_statusBar.setPartWidth(STATUSBAR_EOF_FORMAT, nppParam._dpiManager.scaleX(110));
 	_statusBar.setPartWidth(STATUSBAR_UNICODE_TYPE, nppParam._dpiManager.scaleX(120));
 	_statusBar.setPartWidth(STATUSBAR_TYPING_MODE, nppParam._dpiManager.scaleX(30));
-	_statusBar.display(willBeShown);
+	_statusBar.display(willBeShown && !_startupEditorOnly);
 
 	_pMainWindow = &_mainDocTab;
 
@@ -450,7 +456,23 @@ LRESULT Notepad_plus::init(HWND hwnd)
 	_pluginsManager.init(nppData);
 	startupTrace("core.views.ready");
 
-	_pluginsManager.loadPluginsV2(nppParam.getPluginRootDir());
+	_pluginsManager.loadPluginsV2(nppParam.getPluginRootDir(), incremental);
+		_coreInitStage = CoreInitStage::plugins;
+		if (incremental)
+			return FALSE;
+	}
+	if (_coreInitStage == CoreInitStage::plugins)
+	{
+		while (_pluginsManager.hasNormalPlugins())
+		{
+			_pluginsManager.loadNextNormalPlugin();
+			if (incremental)
+				return FALSE;
+		}
+		_coreInitStage = CoreInitStage::menus;
+	}
+	if (_coreInitStage == CoreInitStage::menus)
+	{
 	startupTrace("core.plugins.ready");
 	_restoreButton.init(_pPublicInterface->getHinst(), hwnd);
 
@@ -636,11 +658,16 @@ LRESULT Notepad_plus::init(HWND hwnd)
 	startupTrace("core.accelerators.ready");
 
 	::DrawMenuBar(hwnd);
+		_coreInitStage = CoreInitStage::toolbar;
+		if (incremental)
+			return FALSE;
+	}
 
-
+	if (_coreInitStage == CoreInitStage::toolbar)
+	{
 	//-- Tool Bar Section --//
 	toolBarStatusType tbStatus = nppGUI._toolBarStatus;
-	willBeShown = nppGUI._toolbarShow;
+	bool willBeShown = nppGUI._toolbarShow;
 
 	// To notify plugins that toolbar icons can be registered
 	SCNotification scnN;
@@ -658,9 +685,20 @@ LRESULT Notepad_plus::init(HWND hwnd)
 	_rebarBottom.init(_pPublicInterface->getHinst(), hwnd);
 	_toolBar.addToRebar(&_rebarTop);
 	_rebarTop.setIDVisible(REBAR_BAR_TOOLBAR, willBeShown);
+	if (_startupEditorOnly)
+	{
+		_rebarTop.display(false);
+		_rebarBottom.display(false);
+	}
 
 	checkMacroState();
+		_coreInitStage = CoreInitStage::dialogs;
+		if (incremental)
+			return FALSE;
+	}
 
+	if (_coreInitStage == CoreInitStage::dialogs)
+	{
 	//--Init dialogs--//
 	_findReplaceDlg.init(_pPublicInterface->getHinst(), hwnd, &_pEditView);
 	_findInFinderDlg.init(_pPublicInterface->getHinst(), hwnd);
@@ -785,6 +823,12 @@ LRESULT Notepad_plus::init(HWND hwnd)
 	// WM_ACTIVATE focuses the selected editor after the main window is shown.
 	// Focusing its hidden child here causes an extra activation/IME transition.
 	startupTrace("core.init.end");
+	_mainDocTab.display(viewVisible(MAIN_VIEW));
+	_subDocTab.display(viewVisible(SUB_VIEW));
+	_statusBar.display(nppGUI._statusBarShow);
+	_rebarTop.display(nppGUI._toolbarShow);
+		_coreInitStage = CoreInitStage::done;
+	}
 
 	return TRUE;
 }

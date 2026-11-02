@@ -158,7 +158,8 @@ void Notepad_plus_Window::finishStartup(bool incremental)
 	{
 		_notepad_plus_plus_core._pEditView->saveCurrentPos();
 		// WM_CREATE already made the real editors. Complete their existing owner.
-		_notepad_plus_plus_core.init(_hSelf);
+		if (!_notepad_plus_plus_core.init(_hSelf, incremental))
+			return;
 	}
 	_notepad_plus_plus_core.staticCheckMenuAndTB();
 
@@ -181,6 +182,12 @@ void Notepad_plus_Window::finishStartup(bool incremental)
 
 	if (cmdLineParams->_alwaysOnTop)
 		::SendMessage(_hSelf, WM_COMMAND, IDM_VIEW_ALWAYSONTOP, 0);
+		if (_editorFirstStartup && ::IsWindowVisible(_hSelf))
+		{
+			_notepad_plus_plus_core.commitStartupLayout();
+			::RedrawWindow(_hSelf, nullptr, nullptr,
+				RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW);
+		}
 		_startupStage = StartupStage::session;
 		if (incremental)
 			return;
