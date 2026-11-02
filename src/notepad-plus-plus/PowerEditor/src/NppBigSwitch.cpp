@@ -93,6 +93,12 @@ LRESULT CALLBACK Notepad_plus_Window::Notepad_plus_Proc(HWND hwnd, UINT message,
 
 LRESULT Notepad_plus_Window::runProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+	if ((message == WM_COMMAND && !lParam && LOWORD(wParam) == IDM_VIEW_SIMPLEMODE) ||
+		(message == NPPM_MENUCOMMAND && lParam == IDM_VIEW_SIMPLEMODE))
+	{
+		toggleSimpleMode();
+		return TRUE;
+	}
 	if (_startupTimer && !_startupInProgress)
 	{
 		if (message == WM_TIMER && wParam == _startupTimer)
@@ -2379,16 +2385,15 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 		{
 			bool hide = (lParam != 0);
 			bool oldVal = DocTabView::getHideTabBarStatus();
-			if (hide == oldVal) return oldVal;
-
-			DocTabView::setHideTabBarStatus(hide);
-			::SendMessage(hwnd, WM_SIZE, 0, 0);
-
+			if (!hide)
+				_startupNoTab = false;
 			NppGUI & nppGUI = (NppParameters::getInstance()).getNppGUI();
 			if (hide)
 				nppGUI._tabStatus |= TAB_HIDE;
 			else
 				nppGUI._tabStatus &= ~TAB_HIDE;
+			DocTabView::setHideTabBarStatus(hide || nppGUI._simpleMode || _startupNoTab);
+			::SendMessage(hwnd, WM_SIZE, 0, 0);
 
 			return oldVal;
 		}
@@ -2409,19 +2414,16 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case NPPM_ISTOOLBARHIDDEN :
 		{
-			return !_rebarTop.getIDVisible(REBAR_BAR_TOOLBAR);
+			return nppParam.getNppGUI()._simpleMode || !_rebarTop.getIDVisible(REBAR_BAR_TOOLBAR);
 		}
 
 		case NPPM_HIDEMENU:
 		{
 			bool hide = (lParam == TRUE);
 			bool isHidden = ::GetMenu(hwnd) == NULL;
-			if (hide == isHidden)
-				return isHidden;
-
 			NppGUI & nppGUI = nppParam.getNppGUI();
 			nppGUI._menuBarShow = !hide;
-			if (nppGUI._menuBarShow)
+			if (nppGUI._menuBarShow && !nppGUI._simpleMode)
 				::SetMenu(hwnd, _mainMenuHandle);
 			else
 				::SetMenu(hwnd, NULL);
@@ -2446,7 +2448,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 			_pPublicInterface->getClientRect(rc);
 
 			nppGUI._statusBarShow = show;
-			_statusBar.display(nppGUI._statusBarShow);
+			_statusBar.display(nppGUI._statusBarShow && !nppGUI._simpleMode);
 			::SendMessage(hwnd, WM_SIZE, SIZE_RESTORED, MAKELONG(rc.bottom, rc.right));
 			return oldVal;
 		}
@@ -2704,7 +2706,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 		case WM_ENTERMENULOOP:
 		{
 			const NppGUI & nppgui = nppParam.getNppGUI();
-			if (!nppgui._menuBarShow && !wParam && !_sysMenuEntering)
+			if (!nppgui._simpleMode && !nppgui._menuBarShow && !wParam && !_sysMenuEntering)
 				::SetMenu(hwnd, _mainMenuHandle);
 
 			return TRUE;

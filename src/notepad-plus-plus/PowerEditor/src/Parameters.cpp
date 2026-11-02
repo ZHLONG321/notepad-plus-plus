@@ -238,7 +238,8 @@ static const WinMenuKeyDefinition winKeyDefs[] =
 				 
 	{ VK_NULL,    IDM_VIEW_ALWAYSONTOP,                         false, false, false, nullptr },
 	{ VK_F11,     IDM_VIEW_FULLSCREENTOGGLE,                    false, false, false, nullptr },
-	{ VK_F12,     IDM_VIEW_POSTIT,                              false, false, false, nullptr },
+	{ VK_NULL,    IDM_VIEW_POSTIT,                              false, false, false, nullptr },
+	{ VK_F12,     IDM_VIEW_SIMPLEMODE,                          false, false, false, TEXT("Simple Mode") },
 	{ VK_NULL,    IDM_VIEW_DISTRACTIONFREE,                     false, false, false, nullptr },
 
 	{ VK_NULL,    IDM_VIEW_IN_FIREFOX,                          false, false, false, TEXT("View current file in Firefox") },
@@ -4216,6 +4217,11 @@ void NppParameters::feedGUIParameters(TiXmlNode *node)
 				}
 			}
 		}
+		else if (!lstrcmp(nm, TEXT("SimpleMode")))
+		{
+			const TCHAR* enabled = element->Attribute(TEXT("enabled"));
+			_nppGUI._simpleMode = enabled && !lstrcmp(enabled, TEXT("yes"));
+		}
 		else if (!lstrcmp(nm, TEXT("TabBar")))
 		{
 			bool isFailed = false;
@@ -6342,6 +6348,13 @@ void NppParameters::createXmlTreeFromGUIParams()
 		TiXmlElement *GUIConfigElement = (newGUIRoot->InsertEndChild(TiXmlElement(TEXT("GUIConfig"))))->ToElement();
 		GUIConfigElement->SetAttribute(TEXT("name"), TEXT("MenuBar"));
 		GUIConfigElement->InsertEndChild(TiXmlText(_nppGUI._menuBarShow ? TEXT("show") : TEXT("hide")));
+	}
+
+	// Simple mode does not overwrite individual chrome or panel preferences.
+	{
+		TiXmlElement* mode = (newGUIRoot->InsertEndChild(TiXmlElement(TEXT("GUIConfig"))))->ToElement();
+		mode->SetAttribute(TEXT("name"), TEXT("SimpleMode"));
+		mode->SetAttribute(TEXT("enabled"), _nppGUI._simpleMode ? TEXT("yes") : TEXT("no"));
 	}
 
 	// <GUIConfig name="Caret" width="1" blinkRate="250" />

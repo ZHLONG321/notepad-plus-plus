@@ -230,9 +230,7 @@ LRESULT Notepad_plus::init(HWND hwnd, bool incremental)
 	{
 	startupTrace("core.init.begin");
 	// Menu
-	if (_startupEditorOnly)
-		::SetMenu(hwnd, _mainMenuHandle);
-	else
+	if (!_startupEditorOnly)
 		_mainMenuHandle = ::GetMenu(hwnd);
 	int langPos2BeRemoved = MENUINDEX_LANGUAGE + 1;
 	if (nppGUI._isLangMenuCompact)
@@ -403,7 +401,7 @@ LRESULT Notepad_plus::init(HWND hwnd, bool incremental)
 		TabCtrl_SetItemSize(_mainDocTab.getHSelf(), tabDpiDynamicalWidth, tabDpiDynamicalHeight);
 		TabCtrl_SetItemSize(_subDocTab.getHSelf(), tabDpiDynamicalWidth, tabDpiDynamicalHeight);
 	}
-	if (!_startupEditorOnly)
+	if (!_startupEditorOnly && !nppGUI._simpleMode)
 		_mainDocTab.display();
 
 
@@ -431,7 +429,7 @@ LRESULT Notepad_plus::init(HWND hwnd, bool incremental)
 	_statusBar.setPartWidth(STATUSBAR_EOF_FORMAT, nppParam._dpiManager.scaleX(110));
 	_statusBar.setPartWidth(STATUSBAR_UNICODE_TYPE, nppParam._dpiManager.scaleX(120));
 	_statusBar.setPartWidth(STATUSBAR_TYPING_MODE, nppParam._dpiManager.scaleX(30));
-	_statusBar.display(willBeShown && !_startupEditorOnly);
+	_statusBar.display(willBeShown && !_startupEditorOnly && !nppGUI._simpleMode);
 
 	_pMainWindow = &_mainDocTab;
 
@@ -685,7 +683,7 @@ LRESULT Notepad_plus::init(HWND hwnd, bool incremental)
 	_rebarBottom.init(_pPublicInterface->getHinst(), hwnd);
 	_toolBar.addToRebar(&_rebarTop);
 	_rebarTop.setIDVisible(REBAR_BAR_TOOLBAR, willBeShown);
-	if (_startupEditorOnly)
+	if (_startupEditorOnly || nppGUI._simpleMode)
 	{
 		_rebarTop.display(false);
 		_rebarBottom.display(false);
@@ -823,11 +821,8 @@ LRESULT Notepad_plus::init(HWND hwnd, bool incremental)
 	// WM_ACTIVATE focuses the selected editor after the main window is shown.
 	// Focusing its hidden child here causes an extra activation/IME transition.
 	startupTrace("core.init.end");
-	_mainDocTab.display(viewVisible(MAIN_VIEW));
-	_subDocTab.display(viewVisible(SUB_VIEW));
-	_statusBar.display(nppGUI._statusBarShow);
-	_rebarTop.display(nppGUI._toolbarShow);
 		_coreInitStage = CoreInitStage::done;
+		applySimpleMode();
 	}
 
 	return TRUE;
@@ -5335,6 +5330,26 @@ bool Notepad_plus::goToNextIndicator(int indicID2Search, bool isWrap) const
 		return true;
 	}
 	return false;
+}
+
+void Notepad_plus::applySimpleMode()
+{
+	const auto& gui = NppParameters::getInstance().getNppGUI();
+	if (_coreInitStage != CoreInitStage::done)
+		return;
+	const bool special = _beforeSpecialView._isFullScreen || _beforeSpecialView._isPostIt;
+	const HWND hwnd = _pPublicInterface->getHSelf();
+	::SetMenu(hwnd, !gui._simpleMode && !special && gui._menuBarShow ? _mainMenuHandle : nullptr);
+	_rebarTop.display(!gui._simpleMode && !special);
+	_rebarBottom.display(!gui._simpleMode && !special);
+	DocTabView::setHideTabBarStatus(gui._simpleMode || (gui._tabStatus & TAB_HIDE) != 0 ||
+		_beforeSpecialView._isPostIt || _startupNoTab);
+	_mainDocTab.display(viewVisible(MAIN_VIEW) && !DocTabView::getHideTabBarStatus());
+	_subDocTab.display(viewVisible(SUB_VIEW) && !DocTabView::getHideTabBarStatus());
+	_statusBar.display(gui._statusBarShow && !_beforeSpecialView._isPostIt && !gui._simpleMode);
+	for (const auto* container : _dockingManager.getContainerInfo())
+		container->refreshPresentation();
+	checkMenuItem(IDM_VIEW_SIMPLEMODE, gui._simpleMode);
 }
 
 void Notepad_plus::fullScreenToggle()

@@ -295,6 +295,7 @@ int getGhostTypingSpeedFromParam(ParamVector & params)
 
 const TCHAR FLAG_MULTI_INSTANCE[] = TEXT("-multiInst");
 const TCHAR FLAG_NO_ACTIVATE[] = TEXT("-noActivate");
+const TCHAR FLAG_SIMPLE_MODE[] = TEXT("-simple");
 const TCHAR FLAG_NO_PLUGIN[] = TEXT("-noPlugin");
 const TCHAR FLAG_READONLY[] = TEXT("-ro");
 const TCHAR FLAG_NOSESSION[] = TEXT("-nosession");
@@ -443,6 +444,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int)
 	cmdLineParams._isPreLaunch = isInList(FLAG_SYSTRAY, params);
 	cmdLineParams._alwaysOnTop = isInList(FLAG_ALWAYS_ON_TOP, params);
 	cmdLineParams._noActivate = isInList(FLAG_NO_ACTIVATE, params);
+	cmdLineParams._simpleMode = isInList(FLAG_SIMPLE_MODE, params);
 	cmdLineParams._showLoadingTime = isInList(FLAG_LOADINGTIME, params);
 	cmdLineParams._isSessionFile = isInList(FLAG_OPENSESSIONFILE, params);
 	cmdLineParams._isRecursive = isInList(FLAG_RECURSIVE, params);
@@ -718,6 +720,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int)
 			going = ::GetMessageW(&msg, NULL, 0, 0) != 0;
 			if (going)
 			{
+				if (notepad_plus_plus.translateStartupModeKey(msg))
+					continue;
 				notepad_plus_plus.onInputMessage(msg);
 				// if the message doesn't belong to the notepad_plus_plus's dialog
 				if (!notepad_plus_plus.isDlgsMsg(&msg))

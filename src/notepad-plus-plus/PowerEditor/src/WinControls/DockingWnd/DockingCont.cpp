@@ -25,6 +25,17 @@
 
 using namespace std;
 
+void DockingCont::display(bool toShow) const
+{
+	_requestedVisible = toShow;
+	refreshPresentation();
+}
+
+void DockingCont::refreshPresentation() const
+{
+	StaticDialog::display(_requestedVisible && !NppParameters::getInstance().getNppGUI()._simpleMode);
+}
+
 #ifndef WH_MOUSE_LL
 #define WH_MOUSE_LL 14
 #endif

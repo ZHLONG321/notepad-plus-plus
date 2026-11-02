@@ -48,6 +48,8 @@ class DockingCont : public StaticDialog
 public:
 	DockingCont();
 	~DockingCont();
+	void display(bool toShow = true) const override;
+	void refreshPresentation() const;
 
 	HWND getTabWnd() {
 		return _hContTab;
@@ -184,6 +186,7 @@ protected :
 	LPARAM NotifyParent(UINT message);
 
 private:
+	mutable bool _requestedVisible = false;
 	// handles
 	BOOL					_isActive;
 	bool					_isFloating;

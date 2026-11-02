@@ -26,6 +26,7 @@ notepad++ [--help] [-multiInst] [-noPlugin] [-lLanguage] [-udl=\"My UDL Name\"] 
 --help : This help message\r\
 -multiInst : Launch another Notepad++ instance\r\
 -noActivate : Show the new window without taking foreground focus\r\
+-simple : Start in Simple Mode (hide menu, toolbar and tabs)\r\
 -noPlugin : Launch Notepad++ without loading any plugin\r\
 -l : Open file or Ghost type with syntax highlighting of choice\r\
 -udl=\"My UDL Name\": Open file by applying User Defined Language\r\
@@ -73,6 +74,7 @@ public:
 			(msg.message >= WM_NCMOUSEMOVE && msg.message <= WM_NCXBUTTONDBLCLK))
 			_lastInputTick = ::GetTickCount();
 	}
+	bool translateStartupModeKey(const MSG& msg);
 
 	HACCEL getAccTable() const {
 		return _notepad_plus_plus_core.getAccTable();
@@ -124,7 +126,7 @@ private:
 	bool _delayedLoadInProgress = false;
 	DWORD _lastInputTick = 0;
 	UINT_PTR _delayedPluginTimer = 0;
-	void loadOneDelayedPlugin();
+	void loadOneDelayedPlugin(bool beforePresentation = false);
 	bool _editorFirstStartup = false;
 	UINT_PTR _startupTimer = 0;
 	bool _startupInProgress = false;
@@ -136,6 +138,8 @@ private:
 	time_t _startupTimestamp = 0;
 	void finishStartup(bool incremental = false);
 	void presentStartupWindow(bool editorOnly);
+	bool isSimpleModeKey(const MSG& msg) const;
+	void toggleSimpleMode();
 
 	QuoteParams _quoteParams; // keep the availability of quote parameters for thread using
 	std::wstring _userQuote; // keep the availability of this string for thread using

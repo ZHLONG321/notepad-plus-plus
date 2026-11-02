@@ -225,6 +225,7 @@ struct CmdLineParams
 	bool _showLoadingTime = false;
 	bool _alwaysOnTop = false;
 	bool _noActivate = false;
+	bool _simpleMode = false;
 	int _line2go   = -1;
 	int _column2go = -1;
 	int _pos2go = -1;
@@ -807,6 +808,7 @@ struct NppGUI final
 	bool _toolbarShow = true;
 	bool _statusBarShow = true;
 	bool _menuBarShow = true;
+	bool _simpleMode = false;
 
 	// 1st bit : draw top bar;
 	// 2nd bit : draw inactive tabs

@@ -83,6 +83,9 @@ public :
 	static bool getHideTabBarStatus() {
 		return _hideTabBarStatus;
 	};
+	void display(bool toShow = true) const override {
+		TabBarPlus::display(toShow && !_hideTabBarStatus);
+	}
 
 	virtual void reSizeTo(RECT & rc);
 

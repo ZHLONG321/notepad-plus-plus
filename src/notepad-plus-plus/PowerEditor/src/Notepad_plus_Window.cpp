@@ -65,10 +65,14 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 
 	NppParameters& nppParams = NppParameters::getInstance();
 	NppGUI & nppGUI = nppParams.getNppGUI();
+	if (cmdLineParams->_simpleMode)
+		nppGUI._simpleMode = true;
 	_startupParams = *cmdLineParams;
+	_notepad_plus_plus_core._startupNoTab = cmdLineParams->_isNoTab;
 	_startupCommandLine = cmdLine ? cmdLine : TEXT("");
 	_startupTimestamp = timestampBegin;
-	_editorFirstStartup = !_isPrelaunch && !nppParams.doFunctionListExport() && !nppParams.doPrintAndExit();
+	_editorFirstStartup = nppGUI._simpleMode && !_isPrelaunch &&
+		!nppParams.doFunctionListExport() && !nppParams.doPrintAndExit();
 
 	if (cmdLineParams->_isNoPlugin)
 		_notepad_plus_plus_core._pluginsManager.disable();
@@ -166,7 +170,7 @@ void Notepad_plus_Window::finishStartup(bool incremental)
 	if ((nppGUI._tabStatus & TAB_MULTILINE) != 0)
 		::SendMessage(_hSelf, WM_COMMAND, IDM_VIEW_DRAWTABBAR_MULTILINE, 0);
 
-	if (!nppGUI._menuBarShow)
+	if (nppGUI._simpleMode || !nppGUI._menuBarShow)
 		::SetMenu(_hSelf, NULL);
 
 	if (cmdLineParams->_isNoTab || (nppGUI._tabStatus & TAB_HIDE))
@@ -182,6 +186,7 @@ void Notepad_plus_Window::finishStartup(bool incremental)
 
 	if (cmdLineParams->_alwaysOnTop)
 		::SendMessage(_hSelf, WM_COMMAND, IDM_VIEW_ALWAYSONTOP, 0);
+	_notepad_plus_plus_core.applySimpleMode();
 		if (_editorFirstStartup && ::IsWindowVisible(_hSelf))
 		{
 			_notepad_plus_plus_core.commitStartupLayout();
@@ -327,6 +332,19 @@ void Notepad_plus_Window::finishStartup(bool incremental)
 	if (!cmdLineParams->_noActivate)
 		noActivate.finish();
 	// Present only after layout, files and saved panels have been restored.
+	const bool publishComplete = !_editorFirstStartup && !_isPrelaunch &&
+		!nppParams.doFunctionListExport() && !nppParams.doPrintAndExit();
+	if (publishComplete)
+	{
+		SCNotification ready = {};
+		ready.nmhdr.code = NPPN_READY;
+		ready.nmhdr.hwndFrom = _hSelf;
+		_notepad_plus_plus_core._pluginsManager.notify(&ready);
+		_notepad_plus_plus_core._pluginsManager.runStartupCommands();
+		while (_notepad_plus_plus_core._pluginsManager.hasDelayedPlugins())
+			loadOneDelayedPlugin(true);
+		_notepad_plus_plus_core.applySimpleMode();
+	}
 	if (nppParams.doFunctionListExport() || nppParams.doPrintAndExit())
 	{
 		_notepad_plus_plus_core.commitStartupLayout();
@@ -358,8 +376,11 @@ void Notepad_plus_Window::finishStartup(bool incremental)
 	scnN.nmhdr.code = NPPN_READY;
 	scnN.nmhdr.hwndFrom = _hSelf;
 	scnN.nmhdr.idFrom = 0;
-	_notepad_plus_plus_core._pluginsManager.notify(&scnN);
-	_notepad_plus_plus_core._pluginsManager.runStartupCommands();
+	if (!publishComplete)
+	{
+		_notepad_plus_plus_core._pluginsManager.notify(&scnN);
+		_notepad_plus_plus_core._pluginsManager.runStartupCommands();
+	}
 	startupTrace("plugins.ready");
 	if (_notepad_plus_plus_core._pluginsManager.hasDelayedPlugins())
 	{
@@ -460,6 +481,47 @@ void Notepad_plus_Window::finishStartup(bool incremental)
 }
 
 
+bool Notepad_plus_Window::isSimpleModeKey(const MSG& msg) const
+{
+	for (const auto& shortcut : NppParameters::getInstance().getUserShortcuts())
+	{
+		if (shortcut.getID() != IDM_VIEW_SIMPLEMODE || !shortcut.isEnabled())
+			continue;
+		const auto& key = shortcut.getKeyCombo();
+		return msg.wParam == key._key &&
+			((::GetKeyState(VK_CONTROL) & 0x8000) != 0) == key._isCtrl &&
+			((::GetKeyState(VK_MENU) & 0x8000) != 0) == key._isAlt &&
+			((::GetKeyState(VK_SHIFT) & 0x8000) != 0) == key._isShift;
+	}
+	return false;
+}
+
+bool Notepad_plus_Window::translateStartupModeKey(const MSG& msg)
+{
+	if (!_startupTimer || (msg.message != WM_KEYDOWN && msg.message != WM_SYSKEYDOWN) ||
+		!isSimpleModeKey(msg))
+		return false;
+	toggleSimpleMode();
+	return true;
+}
+
+void Notepad_plus_Window::toggleSimpleMode()
+{
+	StartupNoActivate noActivate(_startupNoActivate);
+	auto& params = NppParameters::getInstance();
+	params.getNppGUI()._simpleMode = !params.getNppGUI()._simpleMode;
+	// A very early toggle needs the controls, not the remaining session files.
+	while (_startupTimer && !_startupInProgress && _startupStage == StartupStage::core)
+		finishStartup(true);
+	_notepad_plus_plus_core.applySimpleMode();
+	if (!_notepad_plus_plus_core._startupEditorOnly)
+		_notepad_plus_plus_core.commitStartupLayout();
+	::RedrawWindow(_hSelf, nullptr, nullptr,
+		RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW);
+	params.createXmlTreeFromGUIParams();
+	params.saveConfig_xml();
+}
+
 void Notepad_plus_Window::presentStartupWindow(bool editorOnly)
 {
 	const auto* cmdLineParams = &_startupParams;
@@ -544,7 +606,7 @@ bool Notepad_plus_Window::isDlgsMsg(MSG *msg) const
 	return false;
 }
 
-void Notepad_plus_Window::loadOneDelayedPlugin()
+void Notepad_plus_Window::loadOneDelayedPlugin(bool beforePresentation)
 {
 	static bool firstTick = true;
 	if (firstTick)
@@ -560,17 +622,17 @@ void Notepad_plus_Window::loadOneDelayedPlugin()
 		_delayedPluginTimer = 0;
 		return;
 	}
-	if (_delayedLoadInProgress || !_startupEditorPainted || !::IsWindowVisible(_hSelf) ||
-		HIWORD(::GetQueueStatus(QS_INPUT | QS_PAINT)))
+	if (_delayedLoadInProgress || (!beforePresentation &&
+		(!_startupEditorPainted || !::IsWindowVisible(_hSelf) || HIWORD(::GetQueueStatus(QS_INPUT | QS_PAINT)))))
 		return;
 	// An empty queue immediately after a keystroke is not an input pause.
-	if (_lastInputTick && ::GetTickCount() - _lastInputTick < 250)
+	if (!beforePresentation && _lastInputTick && ::GetTickCount() - _lastInputTick < 250)
 		return;
 	// Input in another application must not indefinitely postpone our plugins.
 	// Keep the quiet period while any window of this process is foreground.
 	DWORD foregroundProcess = 0;
 	::GetWindowThreadProcessId(::GetForegroundWindow(), &foregroundProcess);
-	if (foregroundProcess == ::GetCurrentProcessId())
+	if (!beforePresentation && foregroundProcess == ::GetCurrentProcessId())
 	{
 		LASTINPUTINFO input = {sizeof(input)};
 		if (::GetLastInputInfo(&input) && ::GetTickCount() - input.dwTime < 100)
@@ -579,7 +641,7 @@ void Notepad_plus_Window::loadOneDelayedPlugin()
 
 	_delayedLoadInProgress = true;
 	struct ResetBusy { bool& busy; ~ResetBusy() { busy = false; } } resetBusy{_delayedLoadInProgress};
-	StartupNoActivate noActivate(_startupNoActivate);
+	StartupNoActivate noActivate(beforePresentation || _startupNoActivate);
 	auto& params = NppParameters::getInstance();
 	const auto priorShortcuts = params.getPluginCommandList();
 	const int index = manager.loadNextDelayedPlugin();

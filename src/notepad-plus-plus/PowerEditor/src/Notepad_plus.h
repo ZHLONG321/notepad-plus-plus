@@ -153,6 +153,7 @@ public:
 
 	LRESULT init(HWND hwnd, bool incremental = false);
 	void initStartupEditor(HWND hwnd);
+	void applySimpleMode();
 	bool prepareStartupDocument(const TCHAR* commandLine, const CmdLineParams& params);
 	LRESULT process(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam);
 	void killAllChildren();
@@ -273,6 +274,7 @@ private:
 	// Restore the model first, then lay out its final tabs and panels once.
 	bool _startupLayoutPending = true;
 	bool _startupEditorOnly = false;
+	bool _startupNoTab = false;
 	BufferID _startupDocument = BUFFER_INVALID;
 	int _startupDocumentView = MAIN_VIEW;
 	bool _startupDocumentAnnounced = false;
