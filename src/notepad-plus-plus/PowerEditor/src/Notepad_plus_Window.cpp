@@ -90,6 +90,26 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 
 
 	startupTrace("window.created");
+	// Creating controls inside WM_CREATE keeps the entire application setup
+	// inside the native top-level creation call. Build the same tree after that
+	// call returns, with the parent still hidden and activation suppressed.
+	_coreInitializationStarted = true;
+	_notepad_plus_plus_core._pPublicInterface = this;
+	try
+	{
+		_notepad_plus_plus_core.init(_hSelf);
+	}
+	catch (std::exception& ex)
+	{
+		::MessageBoxA(_hSelf, ex.what(), "Exception During Window Initialization", MB_OK);
+		exit(-1);
+	}
+	if (NppDarkMode::isEnabled() && NppDarkMode::isExperimentalSupported())
+	{
+		::SetWindowPos(_hSelf, nullptr, 0, 0, 0, 0,
+			SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE);
+	}
+	startupTrace("window.controls.created");
 
 	_notepad_plus_plus_core.staticCheckMenuAndTB();
 

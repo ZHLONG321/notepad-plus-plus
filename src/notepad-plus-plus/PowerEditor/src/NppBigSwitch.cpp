@@ -90,39 +90,16 @@ LRESULT CALLBACK Notepad_plus_Window::Notepad_plus_Proc(HWND hwnd, UINT message,
 
 LRESULT Notepad_plus_Window::runProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+	// Finish the native top-level creation before building its child tree.
+	// Messages sent by CreateWindowEx must not reach uninitialized controls.
+	if (!_coreInitializationStarted)
+	{
+		if (message == WM_CREATE)
+			NppDarkMode::setDarkTitleBar(hwnd);
+		return ::DefWindowProc(hwnd, message, wParam, lParam);
+	}
 	switch (message)
 	{
-		case WM_CREATE:
-		{
-			try
-			{
-				NppDarkMode::setDarkTitleBar(hwnd);
-
-				_notepad_plus_plus_core._pPublicInterface = this;
-				LRESULT lRet = _notepad_plus_plus_core.init(hwnd);
-
-				if (NppDarkMode::isEnabled() && NppDarkMode::isExperimentalSupported())
-				{
-					RECT rcClient;
-					GetWindowRect(hwnd, &rcClient);
-
-					// Inform application of the frame change.
-					SetWindowPos(hwnd,
-						NULL,
-						rcClient.left, rcClient.top,
-						rcClient.right - rcClient.left, rcClient.bottom - rcClient.top,
-						SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE);
-				}
-
-				return lRet;
-			}
-			catch (std::exception& ex)
-			{
-				::MessageBoxA(hwnd, ex.what(), "Exception On WM_CREATE", MB_OK);
-				exit(-1);
-			}
-			break;
-		}
 		case WM_TIMER:
 			if (_delayedPluginTimer && wParam == _delayedPluginTimer)
 			{
