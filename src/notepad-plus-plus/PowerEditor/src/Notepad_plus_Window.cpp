@@ -281,7 +281,7 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		// the UI thread. Otherwise DWM can expose their unpainted white surfaces.
 		startupTrace("begin", L"window.initialRedraw");
 		::RedrawWindow(_hSelf, nullptr, nullptr,
-			RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+			RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW);
 		startupTrace("end", L"window.initialRedraw");
 		if (startupCloaked)
 		{
