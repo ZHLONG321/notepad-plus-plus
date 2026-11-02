@@ -114,7 +114,6 @@ private:
 	static const TCHAR _className[32];
 	bool _isPrelaunch = false;
 	bool _disablePluginsManager = false;
-	bool _coreInitializationStarted = false;
 	bool _startupEditorPainted = false;
 	bool _startupNoActivate = false;
 	bool _delayedLoadInProgress = false;
