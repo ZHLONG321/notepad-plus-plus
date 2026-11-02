@@ -34,7 +34,7 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 {
 	startupTrace("window.init.begin");
 	StartupNoActivate::setBackgroundMode(cmdLineParams->_noActivate);
-	StartupNoActivate noActivate(cmdLineParams->_noActivate);
+	StartupNoActivate noActivate(true);
 	_startupNoActivate = cmdLineParams->_noActivate;
 	time_t timestampBegin = 0;
 	if (cmdLineParams->_showLoadingTime)
@@ -235,6 +235,11 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		_notepad_plus_plus_core.launchFileBrowser(fns, emptyStr, true);
 	}
 	}
+	// Saved dialogs can request focus from WM_INITDIALOG even while their owner
+	// is hidden. Finish constructing the window tree before allowing a normal
+	// launch to activate it and initialize the input method once.
+	if (!cmdLineParams->_noActivate)
+		noActivate.finish();
 	// Present only after layout, files and saved panels have been restored.
 	if (nppParams.doFunctionListExport() || nppParams.doPrintAndExit())
 	{

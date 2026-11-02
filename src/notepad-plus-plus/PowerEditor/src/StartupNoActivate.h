@@ -1,6 +1,6 @@
-// Startup-only protection for the explicitly requested -noActivate launch.
-// Plugins may create hidden top-level dialogs whose default WM_INITDIALOG
-// processing otherwise activates the application before its main window opens.
+// Suppress premature activation while the startup window tree is incomplete.
+// A normal launch releases this guard before presenting its main window;
+// -noActivate keeps it until startup and delayed plugin initialization finish.
 #pragma once
 #include <windows.h>
 #include <commctrl.h>
@@ -38,7 +38,14 @@ public:
 	}
 	~StartupNoActivate()
 	{
-		if (_enabled && --depth() == 0)
+		finish();
+	}
+	void finish()
+	{
+		if (!_enabled)
+			return;
+		_enabled = false;
+		if (--depth() == 0)
 		{
 			if (_hook)
 				::UnhookWindowsHookEx(_hook);
