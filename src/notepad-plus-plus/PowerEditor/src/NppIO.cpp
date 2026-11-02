@@ -2135,6 +2135,8 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 	NppParameters& nppParam = NppParameters::getInstance();
 	bool allSessionFilesLoaded = true;
 	BufferID lastOpened = BUFFER_INVALID;
+	std::vector<BufferID> mainSessionBuffers;
+	std::vector<BufferID> subSessionBuffers;
 	//size_t i = 0;
 	showView(MAIN_VIEW);
 	switchEditViewTo(MAIN_VIEW);	//open files in main
@@ -2183,6 +2185,7 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 		if (lastOpened != BUFFER_INVALID)
 		{
 			startupTrace("session.main.file.opened");
+			mainSessionBuffers.push_back(lastOpened);
 			showView(MAIN_VIEW);
 			const TCHAR *pLn = session._mainViewFiles[i]._langName.c_str();
 			int id = getLangFromMenuName(pLn);
@@ -2301,6 +2304,7 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 		if (lastOpened != BUFFER_INVALID)
 		{
 			showView(SUB_VIEW);
+			subSessionBuffers.push_back(lastOpened);
 			if (canHideView(MAIN_VIEW))
 				hideView(MAIN_VIEW);
 			const TCHAR *pLn = session._subViewFiles[k]._langName.c_str();
@@ -2379,22 +2383,13 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 	{
 		// The selected document was inserted before the other session files.
 		// Restore tab order without moving or copying any document storage.
-		auto orderTabs = [&](DocTabView& tabs, const std::vector<sessionFileInfo>& files) {
+		auto orderTabs = [&](DocTabView& tabs, const std::vector<BufferID>& buffers) {
 			std::vector<BufferID> existing;
 			for (size_t index = 0; index < tabs.nbItem(); ++index)
 				existing.push_back(tabs.getBufferByIndex(index));
 			std::vector<BufferID> ordered;
-			for (const auto& file : files)
+			for (auto buffer : buffers)
 			{
-				auto buffer = MainFileManager.getBufferFromName(file._fileName.c_str());
-				if (buffer == BUFFER_INVALID)
-				{
-					generic_string path = file._fileName;
-					resolveLinkFile(path);
-					TCHAR fullpath[MAX_PATH] = {};
-					if (::GetFullPathName(path.c_str(), MAX_PATH, fullpath, nullptr))
-						buffer = MainFileManager.getBufferFromName(fullpath);
-				}
 				if (std::find(existing.begin(), existing.end(), buffer) != existing.end() &&
 					std::find(ordered.begin(), ordered.end(), buffer) == ordered.end())
 					ordered.push_back(buffer);
@@ -2405,8 +2400,8 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 			for (size_t index = 0; index < ordered.size(); ++index)
 				tabs.setBuffer(index, ordered[index]);
 		};
-		orderTabs(_mainDocTab, session._mainViewFiles);
-		orderTabs(_subDocTab, session._subViewFiles);
+		orderTabs(_mainDocTab, mainSessionBuffers);
+		orderTabs(_subDocTab, subSessionBuffers);
 	}
 	_mainEditView.restoreCurrentPosPreStep();
 	_subEditView.restoreCurrentPosPreStep();
