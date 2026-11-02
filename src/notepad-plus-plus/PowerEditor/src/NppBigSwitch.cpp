@@ -82,7 +82,10 @@ LRESULT CALLBACK Notepad_plus_Window::Notepad_plus_Proc(HWND hwnd, UINT message,
 
 		default:
 		{
-			return (reinterpret_cast<Notepad_plus_Window *>(::GetWindowLongPtr(hwnd, GWLP_USERDATA))->runProc(hwnd, message, wParam, lParam));
+			auto window = reinterpret_cast<Notepad_plus_Window *>(::GetWindowLongPtr(hwnd, GWLP_USERDATA));
+			// WM_GETMINMAXINFO can precede WM_NCCREATE and its instance pointer.
+			return window ? window->runProc(hwnd, message, wParam, lParam) :
+				::DefWindowProc(hwnd, message, wParam, lParam);
 		}
 	}
 }
