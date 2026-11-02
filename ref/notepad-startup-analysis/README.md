@@ -62,6 +62,7 @@ notepad++.exe -simple
 - `configuration-source/effective`、`configuration-source/local`：面板与会话检查使用的配置副本。
 - `session-fixture.json`、运行目录内的文档副本及备份：字符、滚动和恢复检查使用。
 - `artifacts/<程序哈希>/`：需要指定旧程序对照时，放置对应程序、PDB 和来源记录。
+- `windows-window-capture/scripts/window_capture.py` 与 `skill-capture-build/window_capture.dll`：精简模式检查使用的窗口显存采集器。按窗口录制工具的构建方法在本机准备，先创建采集设备，程序退出后再保存图片。
 
 这些名称沿用现有测量入口的约定。目录名中的数字是夹具名称；运行前按实际配置核对文档和插件数量。数据缺少时，先准备数据，不直接运行检查入口。
 
@@ -75,3 +76,15 @@ uv run tmp/SESSION_ID/inspect_background_render.py --runtime startup-idle-normal
 画面取自指定窗口的系统合成结果。采集在窗口出现后附加，首帧时间是采样上界。`measure_posted_input.py` 使用窗口字符消息，真实系统按键另外记录。启动时使用 `-noActivate`，并观察窗口是否进入前台。
 
 `verify_*` 入口保留插件实际命令、保存面板、标签、滚动和增量查找等检查。先阅读对应入口的参数和数据需求，再对隔离运行副本操作。测量结果、截图和日志留在会话目录。
+
+精简模式的检查分别覆盖保存模式、参数覆盖、改键、启动期间切换，以及停靠和浮动面板的隐藏、恢复、保存和再次启动。以下命令在后台隔离副本中操作：
+
+```cmd
+uv run tmp/SESSION_ID/verify_simple_mode.py --runtime startup-idle-default44
+uv run tmp/SESSION_ID/verify_simple_mode.py --runtime startup-idle-normal44
+uv run tmp/SESSION_ID/verify_simple_panels.py --runtime startup-idle-default44 --floating
+uv run tmp/SESSION_ID/verify_simple_panels.py --runtime startup-idle-normal44
+uv run tmp/SESSION_ID/repeat_editor_first.py
+```
+
+重复输入入口对两种插件设置各启动三次，逐帧读取真正编辑区里的字符，并检查文档、光标、撤销和重做在恢复其他会话内容后保留。输入来自后台窗口消息；真实系统按键需要另测。`verify_editor_first.py --scenario blank|commandline|secondary` 分别检查空文档、命令行文件和副视图克隆，`--trace --resume-during-completion` 记录补齐期间再次输入的排队时间。面板截图为原生请求绘制，用来查看面板内容和位置；启动和字符画面另取系统合成器的窗口帧。
