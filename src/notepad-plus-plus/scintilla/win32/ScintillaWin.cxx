@@ -3604,16 +3604,6 @@ int Scintilla_RegisterClasses(void *hInstance) {
 	return result;
 }
 
-// Private static-container bridge: complete a new, unattached ILoader document
-// without installing it in a window just to reset undo and the save point.
-void *Scintilla_FinishLoadedDocument(ILoader *loader) {
-	auto document = static_cast<Document *>(loader->ConvertToDocument());
-	document->DeleteUndoHistory();
-	document->SetSavePoint();
-	document->SetUndoCollection(true);
-	return document;
-}
-
 namespace Scintilla {
 
 int ResourcesRelease(bool fromDllMain) noexcept {

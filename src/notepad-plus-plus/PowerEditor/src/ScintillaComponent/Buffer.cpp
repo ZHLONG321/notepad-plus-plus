@@ -20,17 +20,12 @@
 #include <sys/stat.h>
 #include "Buffer.h"
 #include "Scintilla.h"
-#include "ILoader.h"
 #include "Parameters.h"
 #include "Notepad_plus.h"
 #include "ScintillaEditView.h"
 #include "EncodingMapper.h"
 #include "uchardet.h"
 #include "StartupTrace.h"
-
-// Private bridge to the statically linked editor. Public ILoader and plugin
-// interfaces stay unchanged; the returned document is ready for normal editing.
-void* Scintilla_FinishLoadedDocument(ILoader* loader);
 
 static const int blockSize = 128 * 1024 + 4;
 static const int CR = 0x0D;
@@ -40,20 +35,6 @@ long Buffer::_recentTagCtr = 0;
 
 namespace // anonymous
 {
-	static void requireFileLoadingStatus(bool succeeded)
-	{
-		if (!succeeded)
-			throw std::bad_alloc();
-	}
-
-	static bool appendLoadedText(ILoader* loader, ScintillaEditView* view, const char* data, size_t length)
-	{
-		if (loader)
-			return loader->AddData(data, static_cast<Sci_Position>(length)) == SC_STATUS_OK;
-		view->execute(SCI_APPENDTEXT, length, reinterpret_cast<LPARAM>(data));
-		return view->execute(SCI_GETSTATUS) == SC_STATUS_OK;
-	}
-
 	static EolType getEOLFormatForm(const char* const data, size_t length, EolType defvalue = EolType::osdefault)
 	{
 		assert(length == 0 or data != nullptr && "invalid buffer for getEOLFormatForm()");
@@ -609,7 +590,12 @@ void FileManager::closeBuffer(BufferID id, ScintillaEditView * identifier)
 // backupFileName is sentinel of backup mode: if it's not NULL, then we use it (load it). Otherwise we use filename
 BufferID FileManager::loadFile(const TCHAR * filename, Document doc, int encoding, const TCHAR *backupFileName, FILETIME fileNameTimestamp)
 {
-	const bool ownDoc = !doc;
+	bool ownDoc = false;
+	if (!doc)
+	{
+		doc = (Document)_pscratchTilla->execute(SCI_CREATEDOCUMENT);
+		ownDoc = true;
+	}
 
 	TCHAR fullpath[MAX_PATH];
 	::GetFullPathName(filename, MAX_PATH, fullpath, NULL);
@@ -670,7 +656,7 @@ BufferID FileManager::loadFile(const TCHAR * filename, Document doc, int encodin
 	}
 	else //failed loading, release document
 	{
-		if (ownDoc && doc)
+		if (ownDoc)
 			_pscratchTilla->execute(SCI_RELEASEDOCUMENT, 0, doc);	//Failure, so release document
 		return BUFFER_INVALID;
 	}
@@ -1279,7 +1265,7 @@ LangType FileManager::detectLanguageFromTextBegining(const unsigned char *data, 
 	return L_TEXT;
 }
 
-bool FileManager::loadFileData(Document& doc, const TCHAR * filename, char* data, Utf8_16_Read * unicodeConvertor, LoadedFileFormat& fileFormat)
+bool FileManager::loadFileData(Document doc, const TCHAR * filename, char* data, Utf8_16_Read * unicodeConvertor, LoadedFileFormat& fileFormat)
 {
 	startupTrace("begin", L"file.read.decode");
 	startupTrace("begin", L"file.open");
@@ -1312,37 +1298,33 @@ bool FileManager::loadFileData(Document& doc, const TCHAR * filename, char* data
 		return false;
 	}
 
-	// New files are built without attaching them to a window. Reloads keep the
-	// existing document identity and notifications used by all attached views.
-	const bool newDocument = !doc;
-	ILoader* loader = nullptr;
-	bool ro = false;
+	//Setup scratchtilla for new filedata
 	startupTrace("begin", L"file.prepareDocument");
-	if (!newDocument)
+	_pscratchTilla->execute(SCI_SETSTATUS, SC_STATUS_OK); // reset error status
+	_pscratchTilla->execute(SCI_SETDOCPOINTER, 0, doc);
+	bool ro = _pscratchTilla->execute(SCI_GETREADONLY) != 0;
+	if (ro)
 	{
-		_pscratchTilla->execute(SCI_SETSTATUS, SC_STATUS_OK); // reset error status
-		_pscratchTilla->execute(SCI_SETDOCPOINTER, 0, doc);
-		ro = _pscratchTilla->execute(SCI_GETREADONLY) != 0;
-		if (ro)
-			_pscratchTilla->execute(SCI_SETREADONLY, false);
-		_pscratchTilla->execute(SCI_CLEARALL);
-
-		if (fileFormat._language < L_EXTERNAL)
-		{
-			_pscratchTilla->execute(SCI_SETLEXER, ScintillaEditView::langNames[fileFormat._language].lexerID);
-		}
-		else
-		{
-			int id = fileFormat._language - L_EXTERNAL;
-			TCHAR * name = NppParameters::getInstance().getELCFromIndex(id)._name;
-			WcharMbcsConvertor& wmc = WcharMbcsConvertor::getInstance();
-			const char *pName = wmc.wchar2char(name, CP_ACP);
-			_pscratchTilla->execute(SCI_SETLEXERLANGUAGE, 0, reinterpret_cast<LPARAM>(pName));
-		}
-
-		if (fileFormat._encoding != -1)
-			_pscratchTilla->execute(SCI_SETCODEPAGE, SC_CP_UTF8);
+		_pscratchTilla->execute(SCI_SETREADONLY, false);
 	}
+	_pscratchTilla->execute(SCI_CLEARALL);
+
+
+	if (fileFormat._language < L_EXTERNAL)
+	{
+		_pscratchTilla->execute(SCI_SETLEXER, ScintillaEditView::langNames[fileFormat._language].lexerID);
+	}
+	else
+	{
+		int id = fileFormat._language - L_EXTERNAL;
+		TCHAR * name = NppParameters::getInstance().getELCFromIndex(id)._name;
+		WcharMbcsConvertor& wmc = WcharMbcsConvertor::getInstance();
+		const char *pName = wmc.wchar2char(name, CP_ACP);
+		_pscratchTilla->execute(SCI_SETLEXERLANGUAGE, 0, reinterpret_cast<LPARAM>(pName));
+	}
+
+	if (fileFormat._encoding != -1)
+		_pscratchTilla->execute(SCI_SETCODEPAGE, SC_CP_UTF8);
 	startupTrace("end", L"file.prepareDocument");
 
 	bool success = true;
@@ -1350,17 +1332,9 @@ bool FileManager::loadFileData(Document& doc, const TCHAR * filename, char* data
 	__try
 	{
 		// First allocate enough memory for the whole file (this will reduce memory copy during loading)
-		if (newDocument)
-		{
-			auto result = _pscratchTilla->execute(SCI_CREATELOADER, WPARAM(bufferSizeRequested));
-			requireFileLoadingStatus(result > 0);
-			loader = reinterpret_cast<ILoader*>(result);
-		}
-		else
-		{
-			_pscratchTilla->execute(SCI_ALLOCATE, WPARAM(bufferSizeRequested));
-			requireFileLoadingStatus(_pscratchTilla->execute(SCI_GETSTATUS) == SC_STATUS_OK);
-		}
+		_pscratchTilla->execute(SCI_ALLOCATE, WPARAM(bufferSizeRequested));
+		if (_pscratchTilla->execute(SCI_GETSTATUS) != SC_STATUS_OK)
+			throw;
 
 		size_t lenFile = 0;
 		size_t lenConvert = 0;	//just in case conversion results in 0, but file not empty
@@ -1411,14 +1385,14 @@ bool FileManager::loadFileData(Document& doc, const TCHAR * filename, char* data
 				if (fileFormat._encoding == SC_CP_UTF8)
 				{
 					// Pass through UTF-8 (this does not check validity of characters, thus inserting a multi-byte character in two halfs is working)
-					success = appendLoadedText(loader, _pscratchTilla, data, lenFile);
+					_pscratchTilla->execute(SCI_APPENDTEXT, lenFile, reinterpret_cast<LPARAM>(data));
 				}
 				else
 				{
 					WcharMbcsConvertor& wmc = WcharMbcsConvertor::getInstance();
 					int newDataLen = 0;
 					const char *newData = wmc.encode(fileFormat._encoding, SC_CP_UTF8, data, static_cast<int32_t>(lenFile), &newDataLen, &incompleteMultibyteChar);
-					success = appendLoadedText(loader, _pscratchTilla, newData, newDataLen);
+					_pscratchTilla->execute(SCI_APPENDTEXT, newDataLen, reinterpret_cast<LPARAM>(newData));
 				}
 
 				if (format == EolType::unknown)
@@ -1427,13 +1401,14 @@ bool FileManager::loadFileData(Document& doc, const TCHAR * filename, char* data
 			else
 			{
 				lenConvert = unicodeConvertor->convert(data, lenFile);
-				success = appendLoadedText(loader, _pscratchTilla, unicodeConvertor->getNewBuf(), lenConvert);
+				_pscratchTilla->execute(SCI_APPENDTEXT, lenConvert, reinterpret_cast<LPARAM>(unicodeConvertor->getNewBuf()));
 				if (format == EolType::unknown)
 					format = getEOLFormatForm(unicodeConvertor->getNewBuf(), unicodeConvertor->getNewSize(), EolType::unknown);
 			}
 
 			startupTrace("end", L"file.convertAppend");
-			requireFileLoadingStatus(success);
+			if (_pscratchTilla->execute(SCI_GETSTATUS) != SC_STATUS_OK)
+				throw;
 
 			if (incompleteMultibyteChar != 0)
 			{
@@ -1477,24 +1452,13 @@ bool FileManager::loadFileData(Document& doc, const TCHAR * filename, char* data
 	}
 
 	startupTrace("begin", L"file.finishDocument");
-	if (newDocument)
-	{
-		if (loader)
-		{
-			if (success)
-				doc = reinterpret_cast<Document>(Scintilla_FinishLoadedDocument(loader));
-			else
-				loader->Release();
-		}
-	}
-	else
-	{
-		_pscratchTilla->execute(SCI_EMPTYUNDOBUFFER);
-		_pscratchTilla->execute(SCI_SETSAVEPOINT);
-		if (ro)
-			_pscratchTilla->execute(SCI_SETREADONLY, true);
-		_pscratchTilla->execute(SCI_SETDOCPOINTER, 0, _scratchDocDefault);
-	}
+	_pscratchTilla->execute(SCI_EMPTYUNDOBUFFER);
+	_pscratchTilla->execute(SCI_SETSAVEPOINT);
+
+	if (ro)
+		_pscratchTilla->execute(SCI_SETREADONLY, true);
+
+	_pscratchTilla->execute(SCI_SETDOCPOINTER, 0, _scratchDocDefault);
 	startupTrace("end", L"file.finishDocument");
 
 	startupTrace("end", L"file.read.decode");
