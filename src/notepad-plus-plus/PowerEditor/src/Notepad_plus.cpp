@@ -5482,6 +5482,8 @@ void Notepad_plus::fullScreenToggle()
 	}
 	//::SetForegroundWindow(_pPublicInterface->getHSelf());
 	_beforeSpecialView._isFullScreen = !_beforeSpecialView._isFullScreen;
+	if (NppParameters::getInstance().getNppGUI()._simpleMode)
+		applySimpleMode();
 	::SendMessage(_pPublicInterface->getHSelf(), WM_SIZE, 0, 0);
     if (_beforeSpecialView._isPostIt)
     {
@@ -5607,6 +5609,8 @@ void Notepad_plus::postItToggle()
 	}
 
 	_beforeSpecialView._isPostIt = !_beforeSpecialView._isPostIt;
+	if (NppParameters::getInstance().getNppGUI()._simpleMode)
+		applySimpleMode();
 	::SendMessage(_pPublicInterface->getHSelf(), WM_SIZE, 0, 0);
 }
 
