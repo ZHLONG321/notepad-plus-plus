@@ -327,6 +327,10 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 	startupTrace("plugins.ready");
 	if (_notepad_plus_plus_core._pluginsManager.hasDelayedPlugins())
 	{
+		// The first painted frame starts the same quiet period as an input.
+		// Otherwise the 25 ms timer can enter a plugin before the first key
+		// reaches the newly shown editor.
+		_lastInputTick = ::GetTickCount();
 		// With a window, WM_TIMER carries nIDEvent, not SetTimer's return value.
 		_delayedPluginTimer = reinterpret_cast<UINT_PTR>(this);
 		if (!::SetTimer(_hSelf, _delayedPluginTimer, 25, nullptr))
