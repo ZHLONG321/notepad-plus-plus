@@ -37,7 +37,7 @@
 
 namespace NppDarkMode
 {
-	BufferedPaint::BufferedPaint(HDC target, const RECT& rect) : _dc(target)
+	BufferedPaint::BufferedPaint(HDC target, const RECT& rect, bool nonClient) : _dc(target)
 	{
 		struct ThreadPaint
 		{
@@ -48,7 +48,9 @@ namespace NppDarkMode
 		if (SUCCEEDED(threadPaint.initialized) && !::IsRectEmpty(&rect))
 		{
 			HDC bufferDC = nullptr;
-			_buffer = ::BeginBufferedPaint(target, &rect, BPBF_COMPATIBLEBITMAP, nullptr, &bufferDC);
+			BP_PAINTPARAMS params = { sizeof(params) };
+			params.dwFlags = nonClient ? BPPF_NONCLIENT : 0;
+			_buffer = ::BeginBufferedPaint(target, &rect, BPBF_COMPATIBLEBITMAP, nonClient ? &params : nullptr, &bufferDC);
 			if (_buffer)
 				_dc = bufferDC;
 		}
@@ -670,7 +672,7 @@ namespace NppDarkMode
 				g_menuTheme = OpenThemeData(hWnd, L"Menu");
 			}
 
-			BufferedPaint paint(pUDMI->um.hdc, pUDMI->dis.rcItem);
+			BufferedPaint paint(pUDMI->um.hdc, pUDMI->dis.rcItem, true);
 			HDC hdc = paint.getDC();
 			HGDIOBJ font = ::GetCurrentObject(pUDMI->um.hdc, OBJ_FONT);
 			HGDIOBJ oldFont = font ? ::SelectObject(hdc, font) : nullptr;

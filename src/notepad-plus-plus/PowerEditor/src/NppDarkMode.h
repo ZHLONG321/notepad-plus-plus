@@ -33,7 +33,7 @@ namespace NppDarkMode
 	class BufferedPaint
 	{
 	public:
-		BufferedPaint(HDC target, const RECT& rect);
+		BufferedPaint(HDC target, const RECT& rect, bool nonClient = false);
 		~BufferedPaint();
 		BufferedPaint(const BufferedPaint&) = delete;
 		BufferedPaint& operator=(const BufferedPaint&) = delete;
