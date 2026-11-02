@@ -2131,19 +2131,52 @@ void Notepad_plus::loadLastSession()
 
 bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shouldLoadFileBrowser)
 {
-	startupTrace("session.restore.begin");
+	return restoreSession(session, isSnapshotMode, shouldLoadFileBrowser, nullptr);
+}
+
+bool Notepad_plus::restoreStartupSession()
+{
+	if (!_startupSessionProgress.started)
+		_startupSession = NppParameters::getInstance().getSession();
+	const bool previousFolding = _isFolding;
+	_isFolding = true;
+	struct RestoreFolding { bool& flag; bool previous; ~RestoreFolding() { flag = previous; } } restoreFolding{_isFolding, previousFolding};
+	return restoreSession(_startupSession, NppParameters::getInstance().getNppGUI().isSnapshotMode(), false, &_startupSessionProgress);
+}
+
+bool Notepad_plus::restoreSession(Session& session, bool isSnapshotMode, bool shouldLoadFileBrowser, SessionRestoreProgress* progress)
+{
+	SessionRestoreProgress synchronous;
+	auto& state = progress ? *progress : synchronous;
+	if (!state.started)
+	{
+		startupTrace("session.restore.begin");
+		state.started = true;
+	}
 	NppParameters& nppParam = NppParameters::getInstance();
-	bool allSessionFilesLoaded = true;
+	bool& allSessionFilesLoaded = state.allFilesLoaded;
 	BufferID lastOpened = BUFFER_INVALID;
-	std::vector<BufferID> mainSessionBuffers;
-	std::vector<BufferID> subSessionBuffers;
+	auto& mainSessionBuffers = state.mainBuffers;
+	auto& subSessionBuffers = state.subBuffers;
+	// Yield with the user's document selected. No messages are pumped inside
+	// a partially restored file; pending input runs after returning to the loop.
+	auto yieldToInput = [&]() {
+		if (_startupDocument != BUFFER_INVALID)
+		{
+			auto& view = _startupDocumentView == MAIN_VIEW ? _mainEditView : _subEditView;
+			if (view.getCurrentBufferID() != _startupDocument)
+				activateBuffer(_startupDocument, _startupDocumentView);
+			if (currentView() != _startupDocumentView)
+				switchEditViewTo(_startupDocumentView);
+		}
+	};
 	//size_t i = 0;
 	showView(MAIN_VIEW);
 	switchEditViewTo(MAIN_VIEW);	//open files in main
 
-	int mainIndex2Update = -1;
+	int& mainIndex2Update = state.mainFold;
 
-	for (size_t i = 0; i < session.nbMainFiles() ; )
+	for (size_t& i = state.mainIndex; i < session.nbMainFiles() ; )
 	{
 		startupTrace("session.main.file.begin");
 		const TCHAR *pFn = session._mainViewFiles[i]._fileName.c_str();
@@ -2199,6 +2232,7 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 			if (lastOpened == _startupDocument && _startupDocumentView == MAIN_VIEW)
 			{
 				++i;
+				if (progress) { yieldToInput(); return false; }
 				continue;
 			}
 
@@ -2244,20 +2278,22 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 			session._mainViewFiles.erase(posIt);
 			allSessionFilesLoaded = false;
 		}
+		if (progress) { yieldToInput(); return false; }
 	}
 	if (mainIndex2Update != -1)
 	{
 		_isFolding = true;
 		_mainEditView.syncFoldStateWith(session._mainViewFiles[mainIndex2Update]._foldStates);
 		_isFolding = false;
+		mainIndex2Update = -1;
 	}
 
 
 	showView(SUB_VIEW);
 	switchEditViewTo(SUB_VIEW);	//open files in sub
-	int subIndex2Update = -1;
+	int& subIndex2Update = state.subFold;
 
-	for (size_t k = 0 ; k < session.nbSubFiles() ; )
+	for (size_t& k = state.subIndex; k < session.nbSubFiles() ; )
 	{
 		const TCHAR *pFn = session._subViewFiles[k]._fileName.c_str();
 
@@ -2320,6 +2356,7 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 			if (lastOpened == _startupDocument && _startupDocumentView == SUB_VIEW)
 			{
 				++k;
+				if (progress) { yieldToInput(); return false; }
 				continue;
 			}
 
@@ -2371,6 +2408,7 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 			session._subViewFiles.erase(posIt);
 			allSessionFilesLoaded = false;
 		}
+		if (progress) { yieldToInput(); return false; }
 	}
 	if (subIndex2Update != -1)
 	{
@@ -2432,7 +2470,7 @@ bool Notepad_plus::loadSession(Session & session, bool isSnapshotMode, bool shou
 	}
 
 	startupTrace("session.restore.end");
-	return allSessionFilesLoaded;
+	return progress ? true : allSessionFilesLoaded;
 }
 
 bool Notepad_plus::fileLoadSession(const TCHAR *fn)

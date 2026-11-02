@@ -276,6 +276,21 @@ private:
 	BufferID _startupDocument = BUFFER_INVALID;
 	int _startupDocumentView = MAIN_VIEW;
 	bool _startupDocumentAnnounced = false;
+	struct SessionRestoreProgress
+	{
+		bool started = false;
+		bool allFilesLoaded = true;
+		size_t mainIndex = 0;
+		size_t subIndex = 0;
+		int mainFold = -1;
+		int subFold = -1;
+		std::vector<BufferID> mainBuffers;
+		std::vector<BufferID> subBuffers;
+	};
+	Session _startupSession;
+	SessionRestoreProgress _startupSessionProgress;
+	bool restoreStartupSession();
+	bool restoreSession(Session& session, bool isSnapshotMode, bool shouldLoadFileBrowser, SessionRestoreProgress* progress);
 	Notepad_plus_Window *_pPublicInterface = nullptr;
     Window *_pMainWindow = nullptr;
 	DockingManager _dockingManager;

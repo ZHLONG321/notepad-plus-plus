@@ -138,20 +138,22 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 	finishStartup();
 }
 
-void Notepad_plus_Window::finishStartup()
+void Notepad_plus_Window::finishStartup(bool incremental)
 {
-	if (_startupTimer)
-	{
-		::KillTimer(_hSelf, _startupTimer);
-		_startupTimer = 0;
-	}
-	startupTrace("startup.completion.begin");
+	if (_startupInProgress || _startupStage == StartupStage::done)
+		return;
+	_startupInProgress = true;
+	struct ResetBusy { bool& busy; ~ResetBusy() { busy = false; } } resetBusy{_startupInProgress};
+	if (_startupStage == StartupStage::core)
+		startupTrace("startup.completion.begin");
 	StartupNoActivate noActivate(true);
 	CmdLineParams* cmdLineParams = &_startupParams;
 	const TCHAR* cmdLine = _startupCommandLine.c_str();
 	time_t timestampBegin = _startupTimestamp;
 	auto& nppParams = NppParameters::getInstance();
 	auto& nppGUI = nppParams.getNppGUI();
+	if (_startupStage == StartupStage::core)
+	{
 	if (_editorFirstStartup)
 	{
 		_notepad_plus_plus_core._pEditView->saveCurrentPos();
@@ -179,10 +181,36 @@ void Notepad_plus_Window::finishStartup()
 
 	if (cmdLineParams->_alwaysOnTop)
 		::SendMessage(_hSelf, WM_COMMAND, IDM_VIEW_ALWAYSONTOP, 0);
+		_startupStage = StartupStage::session;
+		if (incremental)
+			return;
+	}
 
-	if (nppGUI._rememberLastSession && !nppGUI._isCmdlineNosessionActivated)
-		_notepad_plus_plus_core.loadLastSession();
+	if (_startupStage == StartupStage::session)
+	{
+		if (nppGUI._rememberLastSession && !nppGUI._isCmdlineNosessionActivated)
+		{
+			if (_notepad_plus_plus_core._startupDocument != BUFFER_INVALID)
+			{
+				bool complete;
+				do
+				{
+					_notepad_plus_plus_core._pEditView->saveCurrentPos();
+					complete = _notepad_plus_plus_core.restoreStartupSession();
+				} while (!complete && !incremental);
+				if (!complete)
+					return;
+			}
+			else
+				_notepad_plus_plus_core.loadLastSession();
+		}
+		_startupStage = StartupStage::catalogs;
+		if (incremental)
+			return;
+	}
 
+	if (_startupStage == StartupStage::catalogs)
+	{
 	startupTrace("window.positioned");
 	{
 	StartupTraceScope trace(L"startup.configurationCatalogs");
@@ -252,11 +280,24 @@ void Notepad_plus_Window::finishStartup()
 	}
 
 	}
-	// Restore all dockable panels from the last session
+		_startupStage = StartupStage::panels;
+	}
+	// Restore each saved panel between message-loop turns.
+	if (_startupStage == StartupStage::panels)
 	{
 	StartupTraceScope trace(L"startup.savedPanels");
-	for (size_t i = 0, len = _notepad_plus_plus_core._internalFuncIDs.size() ; i < len ; ++i)
-		::SendMessage(_hSelf, WM_COMMAND, _notepad_plus_plus_core._internalFuncIDs[i], 0);
+	while (_startupPanelIndex < _notepad_plus_plus_core._internalFuncIDs.size())
+	{
+		::SendMessage(_hSelf, WM_COMMAND, _notepad_plus_plus_core._internalFuncIDs[_startupPanelIndex++], 0);
+		if (incremental)
+			return;
+	}
+		_startupStage = StartupStage::finalize;
+	}
+	if (_startupTimer)
+	{
+		::KillTimer(_hSelf, _startupTimer);
+		_startupTimer = 0;
 	}
 
 	std::vector<generic_string> fns;
@@ -401,6 +442,7 @@ void Notepad_plus_Window::finishStartup()
 	// Make this call later to take effect
 	::SendMessage(_hSelf, NPPM_INTERNAL_SETWORDCHARS, 0, 0);
 	_notepad_plus_plus_core._startupDocument = BUFFER_INVALID;
+	_startupStage = StartupStage::done;
 	startupTrace("startup.completion.end");
 
 	if (nppParams.doFunctionListExport())

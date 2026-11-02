@@ -127,10 +127,14 @@ private:
 	void loadOneDelayedPlugin();
 	bool _editorFirstStartup = false;
 	UINT_PTR _startupTimer = 0;
+	bool _startupInProgress = false;
+	enum class StartupStage { core, session, catalogs, panels, finalize, done };
+	StartupStage _startupStage = StartupStage::core;
+	size_t _startupPanelIndex = 0;
 	CmdLineParams _startupParams;
 	generic_string _startupCommandLine;
 	time_t _startupTimestamp = 0;
-	void finishStartup();
+	void finishStartup(bool incremental = false);
 	void presentStartupWindow(bool editorOnly);
 
 	QuoteParams _quoteParams; // keep the availability of quote parameters for thread using

@@ -93,13 +93,13 @@ LRESULT CALLBACK Notepad_plus_Window::Notepad_plus_Proc(HWND hwnd, UINT message,
 
 LRESULT Notepad_plus_Window::runProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-	if (_startupTimer)
+	if (_startupTimer && !_startupInProgress)
 	{
 		if (message == WM_TIMER && wParam == _startupTimer)
 		{
 			if (_startupEditorPainted && ::GetTickCount() - _lastInputTick >= 250 &&
 				!HIWORD(::GetQueueStatus(QS_INPUT | QS_PAINT)))
-				finishStartup();
+				finishStartup(true);
 			return 0;
 		}
 		// These requests need the full owner. Process the original message only
