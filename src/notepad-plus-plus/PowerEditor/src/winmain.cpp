@@ -407,10 +407,12 @@ PWSTR stripIgnoredParams(ParamVector & params, PWSTR pCmdLine)
 
 
 #include "StartupTrace.h"
+#include "StartupExceptionTrace.h"
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int)
 {
 	startupTrace("winmain");
+	StartupExceptionTrace::install();
 	generic_string cmdLineString = pCmdLine ? pCmdLine : _T("");
 	ParamVector params;
 	parseCommandLine(pCmdLine, params);
