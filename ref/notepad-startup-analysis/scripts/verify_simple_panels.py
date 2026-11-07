@@ -24,10 +24,13 @@ OUT = Path(__file__).resolve().parent
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--runtime', choices=('startup-idle-default44', 'startup-idle-normal44'), required=True)
+    parser.add_argument('--runtime', required=True)
     parser.add_argument('--floating', action='store_true')
     args = parser.parse_args()
-    runtime = (OUT/'runtime'/args.runtime).resolve()
+    runtime_root = (OUT/'runtime').resolve()
+    runtime = (runtime_root/args.runtime).resolve()
+    if runtime == runtime_root or not runtime.is_relative_to(runtime_root):
+        parser.error('--runtime must select an isolated directory under the session runtime directory')
     folder = OUT/'measurements'/('simple-panels-'+runtime.name+('-floating-' if args.floating else '-docked-')+time.strftime('%Y%m%d-%H%M%S'))
     folder.mkdir()
     retained = {}
