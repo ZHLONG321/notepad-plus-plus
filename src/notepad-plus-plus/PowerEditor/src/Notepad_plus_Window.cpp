@@ -21,6 +21,7 @@
 #include "Notepad_plus_Window.h"
 #include "NppDarkMode.h"
 #include "StartupNoActivate.h"
+#include "StartupInputProfileProbe.h"
 #include <algorithm>
 
 const TCHAR Notepad_plus_Window::_className[32] = TEXT("Notepad++");
@@ -544,6 +545,7 @@ void Notepad_plus_Window::toggleSimpleMode()
 
 void Notepad_plus_Window::presentStartupWindow(bool editorOnly)
 {
+	StartupInputProfileProbe inputProfileProbe(editorOnly);
 	const auto* cmdLineParams = &_startupParams;
 	const auto& nppGUI = NppParameters::getInstance().getNppGUI();
 	// Avoid exposing an animated, only partly composed startup surface.
