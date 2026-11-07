@@ -717,20 +717,15 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int)
 		notepad_plus_plus.init(hInstance, NULL, quotFileName.c_str(), &cmdLineParams);
 		allowWmCopydataMessages(notepad_plus_plus, nppParameters, ver);
 		bool going = true;
-		while (going)
+		// WM_QUIT is synthesized only after posted messages have drained. Once
+		// WM_DESTROY has completed, plugin SHUTDOWN callbacks have already freed
+		// their objects; do not dispatch queued messages to their helper windows.
+		while (going && Notepad_plus_Window::gNppHWND)
 		{
 			going = ::GetMessageW(&msg, NULL, 0, 0) != 0;
-			if (going)
+			// GetMessage can itself deliver a sent message that destroys the host.
+			if (going && Notepad_plus_Window::gNppHWND)
 			{
-				if (startupTraceHandle() != INVALID_HANDLE_VALUE &&
-					!::IsWindow(notepad_plus_plus.getHSelf()))
-				{
-					wchar_t detail[128] = {};
-					swprintf_s(detail, L"hwnd=%p message=%04X wParam=%llX lParam=%llX",
-						msg.hwnd, msg.message, static_cast<unsigned long long>(msg.wParam),
-						static_cast<unsigned long long>(msg.lParam));
-					startupTrace("shutdown.message.afterDestroy", detail);
-				}
 				if (notepad_plus_plus.translateStartupModeKey(msg))
 					continue;
 				notepad_plus_plus.onInputMessage(msg);
@@ -744,6 +739,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int)
 					}
 				}
 			}
+		}
+		if (going)
+		{
+			// The normal destroy path posts exit code zero. No WM_QUIT was read.
+			msg.wParam = 0;
+			startupTrace("shutdown.loop.hostDestroyed");
 		}
 	}
 	catch (int i)
