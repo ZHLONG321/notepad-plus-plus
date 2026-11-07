@@ -362,8 +362,8 @@ public:
 	HACCEL getIncrFindAccTable() const { return _hIncFindAccTab; };
 	HACCEL getFindAccTable() const { return _hFindAccTab; };
 
-	void updateShortcuts(bool redrawMenu = true);
-	void updateFullMenu(bool redrawMenu = true);
+	void updateShortcuts();
+	void updateFullMenu();
 
 private:
 	HMENU _hAccelMenu = nullptr;

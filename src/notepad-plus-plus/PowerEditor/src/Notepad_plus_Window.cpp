@@ -362,16 +362,8 @@ void Notepad_plus_Window::finishStartup(bool incremental)
 		ready.nmhdr.hwndFrom = _hSelf;
 		_notepad_plus_plus_core._pluginsManager.notify(&ready);
 		_notepad_plus_plus_core._pluginsManager.runStartupCommands();
-		const bool hadDelayedPlugins = _notepad_plus_plus_core._pluginsManager.hasDelayedPlugins();
 		while (_notepad_plus_plus_core._pluginsManager.hasDelayedPlugins())
 			loadOneDelayedPlugin(true);
-		// Publish the menu once after hidden plugin construction. All menu data,
-		// shortcuts and plugin callbacks were still updated for every plugin.
-		if (hadDelayedPlugins)
-		{
-			StartupTraceScope trace(L"window.hiddenMenu.commit");
-			::DrawMenuBar(_hSelf);
-		}
 		_notepad_plus_plus_core.applySimpleMode();
 	}
 	if (nppParams.doFunctionListExport() || nppParams.doPrintAndExit())
@@ -696,8 +688,7 @@ void Notepad_plus_Window::loadOneDelayedPlugin(bool beforePresentation)
 	for (size_t i = 0; i < priorShortcuts.size(); ++i)
 		shortcuts[i] = priorShortcuts[i];
 	manager.restoreShortcutOrder();
-	const bool redrawMenu = !beforePresentation || ::IsWindowVisible(_hSelf);
-	core._accelerator.updateShortcuts(redrawMenu);
+	core._accelerator.updateShortcuts();
 	params.reloadContextMenuFromXmlTree(core._mainMenuHandle, manager.getMenuHandle());
 
 	SCNotification notification = {};
@@ -746,10 +737,6 @@ void Notepad_plus_Window::loadOneDelayedPlugin(bool beforePresentation)
 	manager.notify(index, &notification);
 	manager.runStartupCommands(index);
 	core._toolBar.commitDynamicButtons();
-	// A callback can show its owner; visible windows must update immediately.
-	if (redrawMenu || ::IsWindowVisible(_hSelf))
-		::DrawMenuBar(_hSelf);
-	else
-		startupTrace("window.hiddenMenu.deferred");
+	::DrawMenuBar(_hSelf);
 	startupTrace("plugin.delayed.ready");
 }

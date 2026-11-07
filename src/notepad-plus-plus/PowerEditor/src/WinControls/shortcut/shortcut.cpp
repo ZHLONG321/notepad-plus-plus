@@ -531,7 +531,7 @@ INT_PTR CALLBACK Shortcut::run_dlgProc(UINT Message, WPARAM wParam, LPARAM lPara
 }
 
 // return true if one of CommandShortcuts is deleted. Otherwise false.
-void Accelerator::updateShortcuts(bool redrawMenu)
+void Accelerator::updateShortcuts() 
 {
 	const array<unsigned long, 3> incrFindAccIds = { IDM_SEARCH_FINDNEXT, IDM_SEARCH_FINDPREV, IDM_SEARCH_FINDINCREMENT };
 
@@ -609,7 +609,7 @@ void Accelerator::updateShortcuts(bool redrawMenu)
 
 	_nbAccelItems = offset;
 
-	updateFullMenu(redrawMenu);
+	updateFullMenu();
 	
 	//update the table
 	if (_hAccTable)
@@ -647,7 +647,7 @@ void Accelerator::updateShortcuts(bool redrawMenu)
 	return;
 }
 
-void Accelerator::updateFullMenu(bool redrawMenu)
+void Accelerator::updateFullMenu()
 {
 	NppParameters& nppParam = NppParameters::getInstance();
 	vector<CommandShortcut> commands = nppParam.getUserShortcuts();
@@ -674,8 +674,7 @@ void Accelerator::updateFullMenu(bool redrawMenu)
 		updateMenuItemByCommand(pcommands[i]);
 	}
 
-	if (redrawMenu)
-		::DrawMenuBar(_hMenuParent);
+	::DrawMenuBar(_hMenuParent);
 }
 
 void Accelerator::updateMenuItemByCommand(const CommandShortcut& csc)
