@@ -100,7 +100,8 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		WS_EX_ACCEPTFILES | (_notepad_plus_plus_core._nativeLangSpeaker.isRTL()?WS_EX_LAYOUTRTL:0),
 		_className,
 		TEXT("Notepad++"),
-		(WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | (cmdLineParams->_noActivate && nppGUI._isMaximized ? WS_MAXIMIZE : 0)),
+		(WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN |
+			(nppGUI._isMaximized && (cmdLineParams->_noActivate || !cmdLineParams->isPointValid()) ? WS_MAXIMIZE : 0)),
 		// CreateWindowEx bug : set all 0 to walk around the pb
 		0, 0, 0, 0,
 		_hParent, nullptr, _hInst,
@@ -573,23 +574,14 @@ void Notepad_plus_Window::presentStartupWindow(bool editorOnly)
 	bool startupCloaked = setAttribute && SUCCEEDED(setAttribute(_hSelf,
 		DWMWA_CLOAK, &cloak, sizeof(cloak)));
 	startupTrace("end", L"window.dwmPreparation");
-	if (cmdLineParams->_noActivate)
-	{
-		startupTrace("begin", L"window.showWithoutActivation");
-		::SetWindowPos(_hSelf, HWND_BOTTOM, 0, 0, 0, 0,
-			SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-		startupTrace("end", L"window.showWithoutActivation");
-		// Show-only SetWindowPos need not send WM_SIZE. Child layout uses
-		// effective visibility, so run it after showing and before painting.
-	}
-	else
-	{
-		StartupTraceScope trace(L"window.showWithActivation");
-		if (cmdLineParams->isPointValid())
-			::ShowWindow(_hSelf, SW_SHOW);
-		else
-			::ShowWindow(_hSelf, nppGUI._isMaximized ? SW_MAXIMIZE : SW_SHOW);
-	}
+	// Activating the editor can synchronously initialize Windows text services
+	// and the input method. Paint the real themed surface before that work.
+	startupTrace("begin", L"window.showWithoutActivation");
+	::SetWindowPos(_hSelf, HWND_BOTTOM, 0, 0, 0, 0,
+		SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+	startupTrace("end", L"window.showWithoutActivation");
+	// Show-only SetWindowPos need not send WM_SIZE. Child layout uses
+	// effective visibility, so run it after showing and before painting.
 	startupTrace("begin", L"window.initialLayout");
 	if (editorOnly)
 		::SendMessage(_hSelf, WM_SIZE, SIZE_RESTORED, 0);
@@ -612,6 +604,13 @@ void Notepad_plus_Window::presentStartupWindow(bool editorOnly)
 		setAttribute(_hSelf, DWMWA_CLOAK, &cloak, sizeof(cloak));
 		startupTrace("end", L"window.uncloak");
 		startupTrace("window.surface.uncloaked");
+	}
+	if (!cmdLineParams->_noActivate)
+	{
+		StartupTraceScope trace(L"window.showWithActivation");
+		// The themed window is already visible at its final size. Request normal
+		// foreground activation explicitly, including an already-maximized window.
+		::SetForegroundWindow(_hSelf);
 	}
 	if (transitionDisabled)
 	{
