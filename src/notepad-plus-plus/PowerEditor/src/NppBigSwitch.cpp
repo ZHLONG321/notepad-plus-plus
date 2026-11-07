@@ -31,7 +31,7 @@
 #include "NppDarkMode.h"
 #include "StartupTrace.h"
 #include "StartupNoActivate.h"
-#if defined(NPP_QQ_PROXY_PROBE)
+#if defined(NPP_QQ_PROXY_PROBE) && defined(NPP_STARTUP_PROFILE_PROBE)
 #include <imm.h>
 #endif
 
@@ -97,7 +97,7 @@ LRESULT CALLBACK Notepad_plus_Window::Notepad_plus_Proc(HWND hwnd, UINT message,
 
 LRESULT Notepad_plus_Window::runProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-#if defined(NPP_QQ_PROXY_PROBE)
+#if defined(NPP_QQ_PROXY_PROBE) && defined(NPP_STARTUP_PROFILE_PROBE)
     // Diagnostic builds query IME state on its owning thread before plugins load.
     static const UINT imeProbe = ::RegisterWindowMessageW(L"Notepad.StartupImeProbe.93249AC7-8C55-4464-83B7-412D8A633C94");
     if (message == imeProbe && imeProbe)

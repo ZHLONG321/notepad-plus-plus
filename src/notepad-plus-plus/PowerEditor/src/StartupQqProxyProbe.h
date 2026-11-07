@@ -62,14 +62,18 @@ inline bool restore() {
     return VirtualProtect(slot,sizeof(*slot),protection,&ignored)!=FALSE && restored;
 }
 struct Scope {
-    bool valid;
+    bool valid = true;
+    bool installed = false;
     Scope() {
+        // Without an explicit per-process override, retain the installed IME.
+        if (!GetEnvironmentVariableW(L"QQ_TEST_PROXY_PATH",nullptr,0) &&
+            !GetEnvironmentVariableW(L"QQ_TEST_TSF_PATH",nullptr,0)) return;
         StartupTraceScope trace(L"inputServices.qqProxy.install");
-        valid=install();
+        valid=installed=install();
         startupTrace("inputServices.qqProxy.installed",valid?L"1":L"0");
     }
     ~Scope() {
-        if (valid) {
+        if (installed) {
             wchar_t count[32]={};
             swprintf_s(count,L"%u",redirects);
             startupTrace("inputServices.qqProxy.redirectCount",count);
