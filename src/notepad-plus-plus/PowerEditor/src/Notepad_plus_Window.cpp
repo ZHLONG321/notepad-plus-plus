@@ -36,7 +36,15 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 	startupTrace("window.init.begin");
 	startupTrace("begin", L"window.noActivateSetup");
 	StartupNoActivate::setBackgroundMode(cmdLineParams->_noActivate);
-	StartupNoActivate noActivate(true);
+	bool guardInitialWindow = true;
+#if defined(NPP_STARTUP_GUARD_PROBE)
+	// Diagnostic foreground comparison only; background launches keep protection.
+	wchar_t skipGuard[2] = {};
+	if (!cmdLineParams->_noActivate &&
+		::GetEnvironmentVariableW(L"NPP_STARTUP_SKIP_INITIAL_GUARD", skipGuard, 2) == 1 && skipGuard[0] == L'1')
+		guardInitialWindow = false;
+#endif
+	StartupNoActivate noActivate(guardInitialWindow);
 	startupTrace("end", L"window.noActivateSetup");
 	recordRejectedStartupTextServicesExperiment();
 	_startupNoActivate = cmdLineParams->_noActivate;

@@ -69,6 +69,7 @@ LRESULT CALLBACK Notepad_plus_Window::Notepad_plus_Proc(HWND hwnd, UINT message,
 	{
 		case WM_NCCREATE:
 		{
+			StartupTraceScope trace(L"window.WM_NCCREATE");
 			// First message we get the ptr of instantiated object
 			// then stock it into GWLP_USERDATA index in order to retrieve afterward
 			Notepad_plus_Window *pM30ide = static_cast<Notepad_plus_Window *>((reinterpret_cast<LPCREATESTRUCT>(lParam))->lpCreateParams);
@@ -236,6 +237,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 		}
 		if (message == WM_ACTIVATE || message == WM_SETFOCUS)
 		{
+			StartupTraceScope trace(message == WM_ACTIVATE ? L"window.editorOnly.activate" : L"window.editorOnly.setFocus");
 			if ((message == WM_SETFOCUS || LOWORD(wParam) != WA_INACTIVE) && _pEditView)
 				::SetFocus(_pEditView->getHSelf());
 			return 0;
