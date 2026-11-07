@@ -362,8 +362,7 @@ void Notepad_plus_Window::finishStartup(bool incremental)
 		ready.nmhdr.hwndFrom = _hSelf;
 		_notepad_plus_plus_core._pluginsManager.notify(&ready);
 		_notepad_plus_plus_core._pluginsManager.runStartupCommands();
-		while (_notepad_plus_plus_core._pluginsManager.hasDelayedPlugins())
-			loadOneDelayedPlugin(true);
+		loadDelayedPluginsBeforePresentation();
 		_notepad_plus_plus_core.applySimpleMode();
 	}
 	if (nppParams.doFunctionListExport() || nppParams.doPrintAndExit())
@@ -638,7 +637,7 @@ bool Notepad_plus_Window::isDlgsMsg(MSG *msg) const
 	return false;
 }
 
-void Notepad_plus_Window::loadOneDelayedPlugin(bool beforePresentation)
+void Notepad_plus_Window::loadOneDelayedPlugin()
 {
 	static bool firstTick = true;
 	if (firstTick)
@@ -654,17 +653,17 @@ void Notepad_plus_Window::loadOneDelayedPlugin(bool beforePresentation)
 		_delayedPluginTimer = 0;
 		return;
 	}
-	if (_delayedLoadInProgress || (!beforePresentation &&
-		(!_startupEditorPainted || !::IsWindowVisible(_hSelf) || HIWORD(::GetQueueStatus(QS_INPUT | QS_PAINT)))))
+	if (_delayedLoadInProgress || !_startupEditorPainted || !::IsWindowVisible(_hSelf) ||
+		HIWORD(::GetQueueStatus(QS_INPUT | QS_PAINT)))
 		return;
 	// An empty queue immediately after a keystroke is not an input pause.
-	if (!beforePresentation && _lastInputTick && ::GetTickCount() - _lastInputTick < 250)
+	if (_lastInputTick && ::GetTickCount() - _lastInputTick < 250)
 		return;
 	// Input in another application must not indefinitely postpone our plugins.
 	// Keep the quiet period while any window of this process is foreground.
 	DWORD foregroundProcess = 0;
 	::GetWindowThreadProcessId(::GetForegroundWindow(), &foregroundProcess);
-	if (!beforePresentation && foregroundProcess == ::GetCurrentProcessId())
+	if (foregroundProcess == ::GetCurrentProcessId())
 	{
 		LASTINPUTINFO input = {sizeof(input)};
 		if (::GetLastInputInfo(&input) && ::GetTickCount() - input.dwTime < 100)
@@ -675,8 +674,71 @@ void Notepad_plus_Window::loadOneDelayedPlugin(bool beforePresentation)
 	struct ResetBusy { bool& busy; ~ResetBusy() { busy = false; } } resetBusy{_delayedLoadInProgress};
 	// Automatic plugin callbacks and saved panels must not take the foreground
 	// back from another application after an ordinary foreground launch.
-	StartupNoActivate noActivate(beforePresentation || _startupNoActivate ||
+	StartupNoActivate noActivate(_startupNoActivate ||
 		foregroundProcess != ::GetCurrentProcessId());
+	const int index = prepareNextDelayedPlugin();
+	if (index < 0)
+		return;
+	startupTrace("begin", L"plugin.host.accelerators");
+	core._accelerator.updateShortcuts();
+	startupTrace("end", L"plugin.host.accelerators");
+	startupTrace("begin", L"plugin.host.contextMenu");
+	NppParameters::getInstance().reloadContextMenuFromXmlTree(core._mainMenuHandle, manager.getMenuHandle());
+	startupTrace("end", L"plugin.host.contextMenu");
+	notifyDelayedPluginReady(index);
+	startupTrace("begin", L"plugin.host.drawMenuBar");
+	::DrawMenuBar(_hSelf);
+	startupTrace("end", L"plugin.host.drawMenuBar");
+	startupTrace("plugin.delayed.ready");
+}
+
+void Notepad_plus_Window::loadDelayedPluginsBeforePresentation()
+{
+	auto& core = _notepad_plus_plus_core;
+	auto& manager = core._pluginsManager;
+	if (!manager.hasDelayedPlugins())
+		return;
+	_delayedLoadInProgress = true;
+	struct ResetBusy { bool& busy; ~ResetBusy() { busy = false; } } resetBusy{_delayedLoadInProgress};
+	StartupNoActivate noActivate(true);
+	StartupTraceScope trace(L"plugin.batch.complete");
+	std::vector<int> loaded;
+	// Full startup has no interactive window yet. Register the whole batch
+	// before building its accelerator/menu state, as normal startup does.
+	// Preserve the same per-load shortcut restoration and ordering rules
+	// as incremental loading.
+	while (manager.hasDelayedPlugins())
+	{
+		const int index = prepareNextDelayedPlugin();
+		if (index >= 0)
+			loaded.push_back(index);
+	}
+	if (loaded.empty())
+		return;
+	{
+		StartupTraceScope trace(L"plugin.batch.accelerators");
+		core._accelerator.updateShortcuts();
+	}
+	{
+		StartupTraceScope trace(L"plugin.batch.contextMenu");
+		NppParameters::getInstance().reloadContextMenuFromXmlTree(core._mainMenuHandle, manager.getMenuHandle());
+	}
+	// Every callback sees the final command/shortcut set. Keep each plugin's
+	// toolbar, document replay, READY and saved-panel order unchanged.
+	for (const int index : loaded)
+	{
+		notifyDelayedPluginReady(index);
+		startupTrace("plugin.delayed.ready");
+	}
+	{
+		StartupTraceScope trace(L"plugin.batch.drawMenuBar");
+		::DrawMenuBar(_hSelf);
+	}
+}
+
+int Notepad_plus_Window::prepareNextDelayedPlugin()
+{
+	auto& manager = _notepad_plus_plus_core._pluginsManager;
 	auto& params = NppParameters::getInstance();
 	startupTrace("begin", L"plugin.host.shortcutSnapshot");
 	const auto priorShortcuts = params.getPluginCommandList();
@@ -685,7 +747,7 @@ void Notepad_plus_Window::loadOneDelayedPlugin(bool beforePresentation)
 	const int index = manager.loadNextDelayedPlugin();
 	startupTrace("end", L"plugin.host.loadAndMenu");
 	if (index < 0)
-		return;
+		return index;
 	startupTrace("begin", L"plugin.host.shortcutSettings");
 	params.reloadPluginCmds();
 	// Preserve any shortcut edited while this plugin was waiting for idle.
@@ -694,13 +756,13 @@ void Notepad_plus_Window::loadOneDelayedPlugin(bool beforePresentation)
 		shortcuts[i] = priorShortcuts[i];
 	manager.restoreShortcutOrder();
 	startupTrace("end", L"plugin.host.shortcutSettings");
-	startupTrace("begin", L"plugin.host.accelerators");
-	core._accelerator.updateShortcuts();
-	startupTrace("end", L"plugin.host.accelerators");
-	startupTrace("begin", L"plugin.host.contextMenu");
-	params.reloadContextMenuFromXmlTree(core._mainMenuHandle, manager.getMenuHandle());
-	startupTrace("end", L"plugin.host.contextMenu");
+	return index;
+}
 
+void Notepad_plus_Window::notifyDelayedPluginReady(int index)
+{
+	auto& core = _notepad_plus_plus_core;
+	auto& manager = core._pluginsManager;
 	SCNotification notification = {};
 	notification.nmhdr.hwndFrom = _hSelf;
 	notification.nmhdr.code = NPPN_TBMODIFICATION;
@@ -759,8 +821,4 @@ void Notepad_plus_Window::loadOneDelayedPlugin(bool beforePresentation)
 	startupTrace("begin", L"plugin.host.dynamicToolbar");
 	core._toolBar.commitDynamicButtons();
 	startupTrace("end", L"plugin.host.dynamicToolbar");
-	startupTrace("begin", L"plugin.host.drawMenuBar");
-	::DrawMenuBar(_hSelf);
-	startupTrace("end", L"plugin.host.drawMenuBar");
-	startupTrace("plugin.delayed.ready");
 }

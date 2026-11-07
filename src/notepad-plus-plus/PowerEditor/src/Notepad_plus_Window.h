@@ -127,7 +127,10 @@ private:
 	bool _delayedLoadInProgress = false;
 	DWORD _lastInputTick = 0;
 	UINT_PTR _delayedPluginTimer = 0;
-	void loadOneDelayedPlugin(bool beforePresentation = false);
+	void loadOneDelayedPlugin();
+	void loadDelayedPluginsBeforePresentation();
+	int prepareNextDelayedPlugin();
+	void notifyDelayedPluginReady(int index);
 	bool _editorFirstStartup = false;
 	UINT_PTR _startupTimer = 0;
 	bool _startupInProgress = false;
