@@ -79,7 +79,15 @@ public:
 	~PluginsManager()
 	{
 		for (size_t i = 0, len = _pluginInfos.size(); i < len; ++i)
+		{
+			// SHUTDOWN does not guarantee that a plugin joined its workers.
+			// Keep their code mapped until ExitProcess stops the other threads
+			// before DLL_PROCESS_DETACH. Explicit unload/load-failure cleanup
+			// still uses FreeLibrary while the application is running.
+			if (_noMoreNotification)
+				_pluginInfos[i]->_hLib = nullptr;
 			delete _pluginInfos[i];
+		}
 
 		if (_hPluginsMenu)
 			DestroyMenu(_hPluginsMenu);
