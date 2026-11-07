@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #pragma once
 #include "Notepad_plus.h"
+#include "StartupTextServices.h"
 #include <ctime>
 
 const int splitterSize = 8;
@@ -114,6 +115,7 @@ public:
 
 
 private:
+	StartupTextServices _startupTextServices;
 	Notepad_plus _notepad_plus_plus_core;
 	static LRESULT CALLBACK Notepad_plus_Proc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam);
 	LRESULT runProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam);

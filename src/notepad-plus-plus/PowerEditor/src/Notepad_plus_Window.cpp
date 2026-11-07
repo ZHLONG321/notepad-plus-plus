@@ -37,6 +37,7 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 	StartupNoActivate::setBackgroundMode(cmdLineParams->_noActivate);
 	StartupNoActivate noActivate(true);
 	startupTrace("end", L"window.noActivateSetup");
+	_startupTextServices.activateIfRequested();
 	_startupNoActivate = cmdLineParams->_noActivate;
 	time_t timestampBegin = 0;
 	if (cmdLineParams->_showLoadingTime)
