@@ -67,6 +67,20 @@ notepad++.exe -simple
 
 主窗口成为前台不代表编辑区已取得焦点。真实发键前，用 `GetGUIThreadInfo` 确认焦点属于本次隔离进程的 Scintilla，并在每次发键前确认目标仍是前台；没有取得焦点就停止发键。等待编辑区焦点不自动重试启动，也不增加已获准的前台次数。
 
+## 隐藏窗口的系统成本
+
+`scripts/measure_hidden_window_cost.cpp` 用空窗口比较直接创建弹出窗口和先创建子窗口再恢复弹出窗口的成本，也测量重复清除窗口区域的耗时。它不加载输入法，不显示窗口，不设置焦点。每种路径运行三组、每组六个窗口；每组对前三个窗口各清除两次区域。子窗口路径在恢复弹出窗口之前清除区域，这与真实输入法的调用顺序可能不同。
+
+在配置好 x64 MSVC 和 Windows SDK 的开发者终端中，从项目根构建，输出放在已经准备好的会话目录：
+
+```text
+cl /nologo /std:c++17 /EHsc /O2 /MT /Zi /utf-8 ref/notepad-startup-analysis/scripts/measure_hidden_window_cost.cpp /Fotmp/SESSION_ID/measure_hidden_window_cost.obj /Fdtmp/SESSION_ID/compile.pdb /Fetmp/SESSION_ID/measure_hidden_window_cost.exe /link /DEBUG /INCREMENTAL:NO /MANIFEST:EMBED /MANIFESTINPUT:src/notepad-plus-plus/PowerEditor/src/notepad++.exe.manifest /MANIFESTINPUT:src/notepad-plus-plus/PowerEditor/src/dpiAware.manifest user32.lib gdi32.lib
+```
+
+在限制为两个逻辑处理器、低于正常优先级的任务进程中运行。无参数使用当前桌面；附加 `private` 使用新建但从未显示的桌面。两者都会检查输入桌面没有改变，输出 `done,0,input_desktop_unchanged,1` 表示本次结构检查通过。日志中的 `thread` 给出进程与工作线程，`qpc_frequency` 给出计时频率；`create`、`region`、`attach` 最后两列是调用前后的 QPC，可与系统跟踪对齐。保留运行日志、程序哈希和跟踪文件。
+
+这个诊断用于判断 Windows 窗口操作的成本。空窗口更快、样式和 owner 恢复成功，都不能证明实际输入法兼容或 Notepad++ 首次可见输入更快。真实目标仍需单独对照；调试和系统跟踪的时间不混入普通启动成绩。
+
 ## 测量输入
 
 测量脚本以会话目录为数据根，需要下面的本地输入：
