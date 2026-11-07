@@ -9,6 +9,20 @@ namespace StartupExceptionTrace
 static HANDLE output = INVALID_HANDLE_VALUE;
 static thread_local bool recording = false;
 
+// Layout and 64-entry array documented by RtlGetUnloadEventTrace. Resolve
+// before an exception; never ask the loader to identify a faulting address.
+struct UnloadEvent
+{
+    PVOID base;
+    SIZE_T size;
+    ULONG sequence;
+    ULONG timestamp;
+    ULONG checksum;
+    WCHAR name[32];
+};
+using GetUnloadEvents = UnloadEvent* (WINAPI*)();
+static GetUnloadEvents getUnloadEvents = nullptr;
+
 inline void writeRow(DWORD code, const char* kind, unsigned index,
     DWORD64 ip, DWORD64 sp, DWORD64 value)
 {
@@ -42,6 +56,38 @@ inline LONG CALLBACK observe(EXCEPTION_POINTERS* exception)
         for (DWORD i = 0; i < exception->ExceptionRecord->NumberParameters; ++i)
             writeRow(code, "parameter", i, context.Rip, context.Rsp,
                 exception->ExceptionRecord->ExceptionInformation[i]);
+        MEMORY_BASIC_INFORMATION memory = {};
+        if (VirtualQuery(reinterpret_cast<LPCVOID>(context.Rip), &memory, sizeof(memory)))
+        {
+            writeRow(code, "memory.base", 0, context.Rip, context.Rsp,
+                reinterpret_cast<DWORD64>(memory.AllocationBase));
+            writeRow(code, "memory.state", 0, context.Rip, context.Rsp, memory.State);
+            writeRow(code, "memory.protect", 0, context.Rip, context.Rsp, memory.Protect);
+            writeRow(code, "memory.type", 0, context.Rip, context.Rsp, memory.Type);
+        }
+        auto* unloaded = getUnloadEvents ? getUnloadEvents() : nullptr;
+        for (unsigned i = 0; unloaded && i < 64; ++i)
+        {
+            const auto& image = unloaded[i];
+            const DWORD64 base = reinterpret_cast<DWORD64>(image.base);
+            if (!base || context.Rip < base || context.Rip - base >= image.size)
+                continue;
+            writeRow(code, "unloaded.base", image.sequence, context.Rip, context.Rsp, base);
+            writeRow(code, "unloaded.size", image.sequence, context.Rip, context.Rsp, image.size);
+            writeRow(code, "unloaded.rva", image.sequence, context.Rip, context.Rsp, context.Rip - base);
+            wchar_t name[33] = {};
+            memcpy(name, image.name, sizeof(image.name));
+            char utf8[160] = {};
+            WideCharToMultiByte(CP_UTF8, 0, name, -1, utf8, sizeof(utf8), nullptr, nullptr);
+            char line[320] = {};
+            int size = snprintf(line, sizeof(line), "%08lX,%lu,unloaded.name,%lu,%016llX,%016llX,%s\n",
+                code, GetCurrentThreadId(), image.sequence, context.Rip, context.Rsp, utf8);
+            if (size > 0 && size < static_cast<int>(sizeof(line)))
+            {
+                DWORD written;
+                WriteFile(output, line, static_cast<DWORD>(size), &written, nullptr);
+            }
+        }
         for (unsigned frame = 0; frame < 64 && context.Rip; ++frame)
         {
             DWORD64 imageBase = 0;
@@ -81,6 +127,8 @@ inline void install()
 {
     if (startupTraceHandle() == INVALID_HANDLE_VALUE)
         return;
+    getUnloadEvents = reinterpret_cast<GetUnloadEvents>(
+        GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetUnloadEventTrace"));
     wchar_t path[32768] = {};
     DWORD length = GetEnvironmentVariableW(L"NPP_STARTUP_TRACE", path, 32768);
     const wchar_t suffix[] = L".exceptions.tsv";
