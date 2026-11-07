@@ -678,23 +678,36 @@ void Notepad_plus_Window::loadOneDelayedPlugin(bool beforePresentation)
 	StartupNoActivate noActivate(beforePresentation || _startupNoActivate ||
 		foregroundProcess != ::GetCurrentProcessId());
 	auto& params = NppParameters::getInstance();
+	startupTrace("begin", L"plugin.host.shortcutSnapshot");
 	const auto priorShortcuts = params.getPluginCommandList();
+	startupTrace("end", L"plugin.host.shortcutSnapshot");
+	startupTrace("begin", L"plugin.host.loadAndMenu");
 	const int index = manager.loadNextDelayedPlugin();
+	startupTrace("end", L"plugin.host.loadAndMenu");
 	if (index < 0)
 		return;
+	startupTrace("begin", L"plugin.host.shortcutSettings");
 	params.reloadPluginCmds();
 	// Preserve any shortcut edited while this plugin was waiting for idle.
 	auto& shortcuts = params.getPluginCommandList();
 	for (size_t i = 0; i < priorShortcuts.size(); ++i)
 		shortcuts[i] = priorShortcuts[i];
 	manager.restoreShortcutOrder();
+	startupTrace("end", L"plugin.host.shortcutSettings");
+	startupTrace("begin", L"plugin.host.accelerators");
 	core._accelerator.updateShortcuts();
+	startupTrace("end", L"plugin.host.accelerators");
+	startupTrace("begin", L"plugin.host.contextMenu");
 	params.reloadContextMenuFromXmlTree(core._mainMenuHandle, manager.getMenuHandle());
+	startupTrace("end", L"plugin.host.contextMenu");
 
 	SCNotification notification = {};
 	notification.nmhdr.hwndFrom = _hSelf;
 	notification.nmhdr.code = NPPN_TBMODIFICATION;
+	startupTrace("begin", L"plugin.host.toolbarNotification");
 	manager.notify(index, &notification);
+	startupTrace("end", L"plugin.host.toolbarNotification");
+	startupTrace("begin", L"plugin.host.replayDocuments");
 	std::vector<BufferID> buffers;
 	for (auto* tabs : {&core._mainDocTab, &core._subDocTab})
 		for (size_t i = 0; i < tabs->nbItem(); ++i)
@@ -728,15 +741,26 @@ void Notepad_plus_Window::loadOneDelayedPlugin(bool beforePresentation)
 		if (send(NPPN_FILEBEFOREOPEN, _hSelf, bufferID))
 			send(NPPN_FILEOPENED, _hSelf, bufferID);
 	}
+	startupTrace("end", L"plugin.host.replayDocuments");
 	notification.nmhdr.hwndFrom = _hSelf;
 	notification.nmhdr.code = NPPN_READY;
 	notification.nmhdr.idFrom = 0;
+	startupTrace("begin", L"plugin.host.readyNotification");
 	manager.notify(index, &notification);
+	startupTrace("end", L"plugin.host.readyNotification");
 	notification.nmhdr.code = NPPN_BUFFERACTIVATED;
 	notification.nmhdr.idFrom = reinterpret_cast<uptr_t>(core._pEditView->getCurrentBufferID());
+	startupTrace("begin", L"plugin.host.bufferNotification");
 	manager.notify(index, &notification);
+	startupTrace("end", L"plugin.host.bufferNotification");
+	startupTrace("begin", L"plugin.host.savedCommands");
 	manager.runStartupCommands(index);
+	startupTrace("end", L"plugin.host.savedCommands");
+	startupTrace("begin", L"plugin.host.dynamicToolbar");
 	core._toolBar.commitDynamicButtons();
+	startupTrace("end", L"plugin.host.dynamicToolbar");
+	startupTrace("begin", L"plugin.host.drawMenuBar");
 	::DrawMenuBar(_hSelf);
+	startupTrace("end", L"plugin.host.drawMenuBar");
 	startupTrace("plugin.delayed.ready");
 }
