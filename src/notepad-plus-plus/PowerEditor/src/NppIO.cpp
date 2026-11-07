@@ -2171,8 +2171,11 @@ bool Notepad_plus::restoreSession(Session& session, bool isSnapshotMode, bool sh
 		}
 	};
 	//size_t i = 0;
-	showView(MAIN_VIEW);
-	switchEditViewTo(MAIN_VIEW);	//open files in main
+	if (session.nbMainFiles() > 0)
+	{
+		showView(MAIN_VIEW);
+		switchEditViewTo(MAIN_VIEW);	//open files in main
+	}
 
 	int& mainIndex2Update = state.mainFold;
 
@@ -2289,8 +2292,13 @@ bool Notepad_plus::restoreSession(Session& session, bool isSnapshotMode, bool sh
 	}
 
 
-	showView(SUB_VIEW);
-	switchEditViewTo(SUB_VIEW);	//open files in sub
+	// Restoring an empty view must not briefly split the live editor before
+	// the final visibility check hides that view again.
+	if (session.nbSubFiles() > 0)
+	{
+		showView(SUB_VIEW);
+		switchEditViewTo(SUB_VIEW);	//open files in sub
+	}
 	int& subIndex2Update = state.subFold;
 
 	for (size_t& k = state.subIndex; k < session.nbSubFiles() ; )
