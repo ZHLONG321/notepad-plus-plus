@@ -9,8 +9,8 @@ namespace StartupExceptionTrace
 static HANDLE output = INVALID_HANDLE_VALUE;
 static thread_local bool recording = false;
 
-// Layout and 64-entry array documented by RtlGetUnloadEventTrace. Resolve
-// before an exception; never ask the loader to identify a faulting address.
+// Documented prefix of an unload event. The actual element stride is supplied
+// by ntdll and can exceed sizeof(UnloadEvent). Resolve before an exception.
 struct UnloadEvent
 {
     PVOID base;
@@ -20,8 +20,10 @@ struct UnloadEvent
     ULONG checksum;
     WCHAR name[32];
 };
-using GetUnloadEvents = UnloadEvent* (WINAPI*)();
-static GetUnloadEvents getUnloadEvents = nullptr;
+using GetUnloadEventsEx = VOID (WINAPI*)(PULONG*, PULONG*, PVOID*);
+static PULONG unloadElementSize = nullptr;
+static PULONG unloadElementCount = nullptr;
+static PVOID unloadEvents = nullptr;
 
 inline void writeRow(DWORD code, const char* kind, unsigned index,
     DWORD64 ip, DWORD64 sp, DWORD64 value)
@@ -53,6 +55,12 @@ inline LONG CALLBACK observe(EXCEPTION_POINTERS* exception)
         writeRow(code, "qpc", 0, context.Rip, context.Rsp, counter.QuadPart);
         writeRow(code, "exception", 0, context.Rip, context.Rsp,
             exception->ExceptionRecord->ExceptionFlags);
+        const DWORD64 registers[] = { context.Rax, context.Rcx, context.Rdx,
+            context.R8, context.R9, context.Rbx, context.Rdi };
+        const char* registerNames[] = { "register.rax", "register.rcx", "register.rdx",
+            "register.r8", "register.r9", "register.rbx", "register.rdi" };
+        for (unsigned i = 0; i < sizeof(registers) / sizeof(registers[0]); ++i)
+            writeRow(code, registerNames[i], i, context.Rip, context.Rsp, registers[i]);
         for (DWORD i = 0; i < exception->ExceptionRecord->NumberParameters; ++i)
             writeRow(code, "parameter", i, context.Rip, context.Rsp,
                 exception->ExceptionRecord->ExceptionInformation[i]);
@@ -65,10 +73,13 @@ inline LONG CALLBACK observe(EXCEPTION_POINTERS* exception)
             writeRow(code, "memory.protect", 0, context.Rip, context.Rsp, memory.Protect);
             writeRow(code, "memory.type", 0, context.Rip, context.Rsp, memory.Type);
         }
-        auto* unloaded = getUnloadEvents ? getUnloadEvents() : nullptr;
-        for (unsigned i = 0; unloaded && i < 64; ++i)
+        const ULONG stride = unloadElementSize ? *unloadElementSize : 0;
+        const ULONG count = unloadElementCount ? *unloadElementCount : 0;
+        for (ULONG i = 0; unloadEvents && stride >= sizeof(UnloadEvent) && i < count; ++i)
         {
-            const auto& image = unloaded[i];
+            UnloadEvent image = {};
+            memcpy(&image, static_cast<const BYTE*>(unloadEvents) +
+                static_cast<SIZE_T>(i) * stride, sizeof(image));
             const DWORD64 base = reinterpret_cast<DWORD64>(image.base);
             if (!base || context.Rip < base || context.Rip - base >= image.size)
                 continue;
@@ -127,8 +138,10 @@ inline void install()
 {
     if (startupTraceHandle() == INVALID_HANDLE_VALUE)
         return;
-    getUnloadEvents = reinterpret_cast<GetUnloadEvents>(
-        GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetUnloadEventTrace"));
+    auto getUnloadEvents = reinterpret_cast<GetUnloadEventsEx>(
+        GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetUnloadEventTraceEx"));
+    if (getUnloadEvents)
+        getUnloadEvents(&unloadElementSize, &unloadElementCount, &unloadEvents);
     wchar_t path[32768] = {};
     DWORD length = GetEnvironmentVariableW(L"NPP_STARTUP_TRACE", path, 32768);
     const wchar_t suffix[] = L".exceptions.tsv";

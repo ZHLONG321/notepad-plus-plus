@@ -51,7 +51,11 @@ public:
 				::UnhookWindowsHookEx(_hook);
 			if (_creationHook)
 				::UnhookWindowsHookEx(_creationHook);
-			::EnumThreadWindows(::GetCurrentThreadId(), updateSubclass, FALSE);
+			// Message-only windows seen by the creation hook are not returned by
+			// EnumThreadWindows. Release exactly what this guard installed.
+			for (HWND hwnd : _subclassedWindows)
+				::RemoveWindowSubclass(hwnd, positionProc, 0x4e505042);
+			_subclassedWindows.clear();
 			active() = nullptr;
 		}
 	}
@@ -67,6 +71,7 @@ private:
 	HHOOK _hook = nullptr;
 	HHOOK _creationHook = nullptr;
 	std::vector<HWND> _pendingCreation;
+	std::vector<HWND> _subclassedWindows;
 	bool _enabled = false;
 	static StartupNoActivate*& active()
 	{
@@ -108,6 +113,9 @@ private:
 		if (enabled)
 		{
 			BOOL installed = ::SetWindowSubclass(hwnd, positionProc, 0x4e505042, 0);
+			if (installed && active() && std::find(active()->_subclassedWindows.begin(),
+				active()->_subclassedWindows.end(), hwnd) == active()->_subclassedWindows.end())
+				active()->_subclassedWindows.push_back(hwnd);
 			tracePosition(hwnd, WM_NCCREATE, installed, nullptr);
 		}
 		else
