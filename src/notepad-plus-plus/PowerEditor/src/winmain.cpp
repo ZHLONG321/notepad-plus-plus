@@ -408,11 +408,18 @@ PWSTR stripIgnoredParams(ParamVector & params, PWSTR pCmdLine)
 
 #include "StartupTrace.h"
 #include "StartupExceptionTrace.h"
+#if defined(NPP_QQ_PROXY_PROBE)
+#include "StartupQqProxyProbe.h"
+#endif
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int)
 {
 	startupTrace("winmain");
 	StartupExceptionTrace::install();
+#if defined(NPP_QQ_PROXY_PROBE)
+	qqredirect::Scope qqProxy;
+	if (!qqProxy.valid) return 9;
+#endif
 	generic_string cmdLineString = pCmdLine ? pCmdLine : _T("");
 	ParamVector params;
 	parseCommandLine(pCmdLine, params);
