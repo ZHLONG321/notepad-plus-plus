@@ -45,7 +45,7 @@ def find_visual_studio() -> Path:
     vswhere = Path(os.environ['ProgramFiles(x86)']) / 'Microsoft Visual Studio/Installer/vswhere.exe'
     installations = json.loads(subprocess.check_output([
         str(vswhere), '-latest', '-products', '*', '-requires',
-        'Microsoft.VisualStudio.Component.VC.Tools.x86.x64', '-format', 'json'], text=True, encoding='utf-8'))
+        'Microsoft.VisualStudio.Component.VC.Tools.x86.x64', '-format', 'json', '-utf8'], text=True, encoding='utf-8'))
     if not installations:
         raise SystemExit('Install Visual Studio C++ build tools before building.')
     return Path(installations[0]['installationPath'])
