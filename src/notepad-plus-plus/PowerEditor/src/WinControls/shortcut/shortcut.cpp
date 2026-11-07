@@ -24,6 +24,7 @@
 #include "resource.h"
 #include "Notepad_plus_Window.h"
 #include "keys.h"
+#include "StartupTrace.h"
 
 using namespace std;
 
@@ -649,43 +650,70 @@ void Accelerator::updateShortcuts()
 
 void Accelerator::updateFullMenu()
 {
+	StartupTraceScope trace(L"shortcuts.updateFullMenu");
+	size_t written = 0;
 	NppParameters& nppParam = NppParameters::getInstance();
 	vector<CommandShortcut> commands = nppParam.getUserShortcuts();
 	for (size_t i = 0; i < commands.size(); ++i)
 	{
-		updateMenuItemByCommand(commands[i]);
+		written += updateMenuItemByCommand(commands[i]);
 	}
 
 	vector<MacroShortcut> mcommands = nppParam.getMacroList();
 	for (size_t i = 0; i < mcommands.size(); ++i)
 	{
-		updateMenuItemByCommand(mcommands[i]);
+		written += updateMenuItemByCommand(mcommands[i]);
 	}
 
 	vector<UserCommand> ucommands = nppParam.getUserCommandList();
 	for (size_t i = 0; i < ucommands.size(); ++i)
 	{
-		updateMenuItemByCommand(ucommands[i]);
+		written += updateMenuItemByCommand(ucommands[i]);
 	}
 
 	vector<PluginCmdShortcut> pcommands = nppParam.getPluginCommandList();
 	for (size_t i = 0; i < pcommands.size(); ++i)
 	{
-		updateMenuItemByCommand(pcommands[i]);
+		written += updateMenuItemByCommand(pcommands[i]);
 	}
 
 	::DrawMenuBar(_hMenuParent);
+	if (startupTraceHandle() != INVALID_HANDLE_VALUE)
+	{
+		wchar_t detail[128] = {};
+		swprintf_s(detail, L"requested=%zu written=%zu", commands.size() + mcommands.size() +
+			ucommands.size() + pcommands.size(), written);
+		startupTrace("shortcuts.menuWrites", detail);
+	}
 }
 
-void Accelerator::updateMenuItemByCommand(const CommandShortcut& csc)
+bool Accelerator::updateMenuItemByCommand(const CommandShortcut& csc)
 {
 	int cmdID = csc.getID();
+	const generic_string label = csc.toMenuItemString();
+	MENUITEMINFO item = {sizeof(item)};
+	item.fMask = MIIM_FTYPE | MIIM_STRING;
+	if (::GetMenuItemInfo(_hAccelMenu, cmdID, FALSE, &item) &&
+		!(item.fType & (MFT_BITMAP | MFT_OWNERDRAW | MFT_SEPARATOR)) && item.cch == label.size())
+	{
+		// Only an exact current string match can skip the existing write path.
+		// Query its length first, so longer labels sharing a prefix cannot match.
+		generic_string current(item.cch + 1, 0);
+		item.dwTypeData = &current[0];
+		++item.cch;
+		if (::GetMenuItemInfo(_hAccelMenu, cmdID, FALSE, &item))
+		{
+			current.resize(item.cch);
+			if (current == label)
+				return false;
+		}
+	}
 	
 	// Ensure that the menu item checks set prior to this update remain in affect.
 	// Ensure that the menu item state is also maintained
 	UINT cmdFlags = GetMenuState(_hAccelMenu, cmdID, MF_BYCOMMAND );
 	cmdFlags = MF_BYCOMMAND | ((cmdFlags&MF_CHECKED) ? MF_CHECKED : MF_UNCHECKED) | ((cmdFlags&MF_DISABLED) ? MF_DISABLED : MF_ENABLED);
-	::ModifyMenu(_hAccelMenu, cmdID, cmdFlags, cmdID, csc.toMenuItemString().c_str());
+	return ::ModifyMenu(_hAccelMenu, cmdID, cmdFlags, cmdID, label.c_str()) != FALSE;
 }
 
 recordedMacroStep::recordedMacroStep(int iMessage, uptr_t wParam, uptr_t lParam, int codepage)

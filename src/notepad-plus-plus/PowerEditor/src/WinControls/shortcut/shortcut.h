@@ -374,7 +374,7 @@ private:
 	ACCEL *_pAccelArray = nullptr;
 	int _nbAccelItems = 0;
 
-	void updateMenuItemByCommand(const CommandShortcut& csc);
+	bool updateMenuItemByCommand(const CommandShortcut& csc);
 };
 
 class ScintillaAccelerator {	//Handles accelerator keys for scintilla
