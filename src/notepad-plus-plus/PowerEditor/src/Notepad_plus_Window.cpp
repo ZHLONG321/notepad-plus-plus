@@ -528,27 +528,6 @@ bool Notepad_plus_Window::translateStartupModeKey(const MSG& msg)
 void Notepad_plus_Window::toggleSimpleMode()
 {
 	StartupNoActivate noActivate(_startupNoActivate);
-	// Buffer the shared child tree while controls change visibility and size.
-	// Do not retain this style during editing: a plugin holding a DC could
-	// otherwise delay presentation until the system's compositing timeout.
-	struct RestoreComposition
-	{
-		HWND window;
-		bool added = false;
-		~RestoreComposition()
-		{
-			if (added)
-				::SetWindowLongPtr(window, GWL_EXSTYLE,
-					::GetWindowLongPtr(window, GWL_EXSTYLE) & ~WS_EX_COMPOSITED);
-		}
-	} composition{_hSelf};
-	const auto extendedStyle = ::GetWindowLongPtr(_hSelf, GWL_EXSTYLE);
-	if (::IsWindowVisible(_hSelf) && !(extendedStyle & WS_EX_COMPOSITED))
-	{
-		::SetLastError(ERROR_SUCCESS);
-		composition.added = ::SetWindowLongPtr(_hSelf, GWL_EXSTYLE,
-			extendedStyle | WS_EX_COMPOSITED) != 0 || ::GetLastError() == ERROR_SUCCESS;
-	}
 	auto& params = NppParameters::getInstance();
 	params.getNppGUI()._simpleMode = !params.getNppGUI()._simpleMode;
 	// A very early toggle needs the controls, not the remaining session files.
