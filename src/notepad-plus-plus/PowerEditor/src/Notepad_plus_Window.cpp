@@ -352,7 +352,8 @@ void Notepad_plus_Window::finishStartup(bool incremental)
 		"startup.completion.activation.suppressed");
 	if (activateAtCompletion)
 		noActivate.finish();
-	// Present only after layout, files and saved panels have been restored.
+	// Finish the available normal plugins before drawing the full interface.
+	// Delayed plugins use the painted-window idle queue in both UI modes.
 	const bool publishComplete = !_editorFirstStartup && !_isPrelaunch &&
 		!nppParams.doFunctionListExport() && !nppParams.doPrintAndExit();
 	if (publishComplete)
@@ -362,7 +363,6 @@ void Notepad_plus_Window::finishStartup(bool incremental)
 		ready.nmhdr.hwndFrom = _hSelf;
 		_notepad_plus_plus_core._pluginsManager.notify(&ready);
 		_notepad_plus_plus_core._pluginsManager.runStartupCommands();
-		loadDelayedPluginsBeforePresentation();
 		_notepad_plus_plus_core.applySimpleMode();
 	}
 	if (nppParams.doFunctionListExport() || nppParams.doPrintAndExit())
@@ -690,50 +690,6 @@ void Notepad_plus_Window::loadOneDelayedPlugin()
 	::DrawMenuBar(_hSelf);
 	startupTrace("end", L"plugin.host.drawMenuBar");
 	startupTrace("plugin.delayed.ready");
-}
-
-void Notepad_plus_Window::loadDelayedPluginsBeforePresentation()
-{
-	auto& core = _notepad_plus_plus_core;
-	auto& manager = core._pluginsManager;
-	if (!manager.hasDelayedPlugins())
-		return;
-	_delayedLoadInProgress = true;
-	struct ResetBusy { bool& busy; ~ResetBusy() { busy = false; } } resetBusy{_delayedLoadInProgress};
-	StartupNoActivate noActivate(true);
-	StartupTraceScope trace(L"plugin.batch.complete");
-	std::vector<int> loaded;
-	// Full startup has no interactive window yet. Register the whole batch
-	// before building its accelerator/menu state, as normal startup does.
-	// Preserve the same per-load shortcut restoration and ordering rules
-	// as incremental loading.
-	while (manager.hasDelayedPlugins())
-	{
-		const int index = prepareNextDelayedPlugin();
-		if (index >= 0)
-			loaded.push_back(index);
-	}
-	if (loaded.empty())
-		return;
-	{
-		StartupTraceScope trace(L"plugin.batch.accelerators");
-		core._accelerator.updateShortcuts();
-	}
-	{
-		StartupTraceScope trace(L"plugin.batch.contextMenu");
-		NppParameters::getInstance().reloadContextMenuFromXmlTree(core._mainMenuHandle, manager.getMenuHandle());
-	}
-	// Every callback sees the final command/shortcut set. Keep each plugin's
-	// toolbar, document replay, READY and saved-panel order unchanged.
-	for (const int index : loaded)
-	{
-		notifyDelayedPluginReady(index);
-		startupTrace("plugin.delayed.ready");
-	}
-	{
-		StartupTraceScope trace(L"plugin.batch.drawMenuBar");
-		::DrawMenuBar(_hSelf);
-	}
 }
 
 int Notepad_plus_Window::prepareNextDelayedPlugin()

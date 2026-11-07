@@ -128,7 +128,6 @@ private:
 	DWORD _lastInputTick = 0;
 	UINT_PTR _delayedPluginTimer = 0;
 	void loadOneDelayedPlugin();
-	void loadDelayedPluginsBeforePresentation();
 	int prepareNextDelayedPlugin();
 	void notifyDelayedPluginReady(int index);
 	bool _editorFirstStartup = false;
