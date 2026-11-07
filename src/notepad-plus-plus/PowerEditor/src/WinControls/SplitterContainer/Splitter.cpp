@@ -186,7 +186,8 @@ void Splitter::init( HINSTANCE hInst, HWND hPere, int splitterSize, double iSpli
 	_clickZone2BR.bottom = clickZoneHeight;
 
 	display();
-	::SendMessage(_hParent, WM_RESIZE_CONTAINER, _rect.left, _rect.top);
+	// The container has no layout yet. Its owner's reSizeTo() will resize the
+	// splitter and its views after supplying the actual bounds.
 }
 
 
