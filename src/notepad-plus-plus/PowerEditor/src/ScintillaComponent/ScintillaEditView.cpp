@@ -179,6 +179,7 @@ int getNbDigits(int aNum, int base)
 
 void ScintillaEditView::init(HINSTANCE hInst, HWND hPere)
 {
+	StartupTraceScope trace(L"editor.init");
 	if (!_SciInit)
 	{
 		if (!Scintilla_RegisterClasses(hInst))
@@ -188,7 +189,9 @@ void ScintillaEditView::init(HINSTANCE hInst, HWND hPere)
 		_SciInit = true;
 	}
 
+	startupTrace("editor.init.classes.ready");
 	Window::init(hInst, hPere);
+	startupTrace("begin", L"editor.init.createWindow");
 	_hSelf = ::CreateWindowEx(
 					0,\
 					TEXT("Scintilla"),\
@@ -205,7 +208,9 @@ void ScintillaEditView::init(HINSTANCE hInst, HWND hPere)
 		throw std::runtime_error("ScintillaEditView::init : CreateWindowEx() function return null");
 	}
 
+	startupTrace("end", L"editor.init.createWindow");
 	NppDarkMode::setDarkScrollBar(_hSelf);
+	startupTrace("editor.init.darkScrollBar.ready");
 
 	_pScintillaFunc = (SCINTILLA_FUNC)::SendMessage(_hSelf, SCI_GETDIRECTFUNCTION, 0, 0);
 	_pScintillaPtr = (SCINTILLA_PTR)::SendMessage(_hSelf, SCI_GETDIRECTPOINTER, 0, 0);
@@ -221,6 +226,7 @@ void ScintillaEditView::init(HINSTANCE hInst, HWND hPere)
 	{
 		throw std::runtime_error("ScintillaEditView::init : SCI_GETDIRECTPOINTER message failed");
 	}
+	startupTrace("editor.init.directAccess.ready");
 	// Seed the selected theme before any plugin or parent can expose this view.
 	StyleArray& startupStyles = NppParameters::getInstance().getMiscStylerArray();
 	int startupDefault = startupStyles.getStylerIndexByID(STYLE_DEFAULT);
@@ -232,6 +238,7 @@ void ScintillaEditView::init(HINSTANCE hInst, HWND hPere)
 		execute(SCI_STYLECLEARALL);
 	}
 
+	startupTrace("editor.init.themeSeed.ready");
 	execute(SCI_SETMARGINMASKN, _SC_MARGE_FOLDER, SC_MASK_FOLDERS);
 	showMargin(_SC_MARGE_FOLDER, true);
 
@@ -266,6 +273,7 @@ void ScintillaEditView::init(HINSTANCE hInst, HWND hPere)
 	execute(SCI_SETSCROLLWIDTHTRACKING, true);
 	execute(SCI_SETSCROLLWIDTH, 1);	//default empty document: override default width of 2000
 
+	startupTrace("editor.init.marginsAndMarkers.ready");
 	// smart hilighting
 	execute(SCI_INDICSETSTYLE, SCE_UNIVERSAL_FOUND_STYLE_SMART, INDIC_ROUNDBOX);
 	execute(SCI_INDICSETSTYLE, SCE_UNIVERSAL_FOUND_STYLE, INDIC_ROUNDBOX);
@@ -300,6 +308,7 @@ void ScintillaEditView::init(HINSTANCE hInst, HWND hPere)
 	execute(SCI_INDICSETUNDER, SCE_UNIVERSAL_FOUND_STYLE_EXT4, true);
 	execute(SCI_INDICSETUNDER, SCE_UNIVERSAL_FOUND_STYLE_EXT5, true);
 
+	startupTrace("editor.init.indicators.ready");
 	// Bound first-time styling while scrolling or switching to an unstyled
 	// document. Scintilla finishes the visible region in idle-time slices,
 	// preserving its normal lexer, fold and modification notifications.
@@ -310,6 +319,7 @@ void ScintillaEditView::init(HINSTANCE hInst, HWND hPere)
 	// If useDirectWrite is turned off, leave the technology setting untouched,
 	// so that existing plugins using SCI_SETTECHNOLOGY behave like before
 
+	startupTrace("editor.init.technology.ready");
 	_codepage = ::GetACP();
 
 	::SetWindowLongPtr(_hSelf, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(this));
@@ -325,6 +335,7 @@ void ScintillaEditView::init(HINSTANCE hInst, HWND hPere)
 		_defaultCharList = defaultCharList;
 		delete[] defaultCharList;
 	}
+	startupTrace("editor.init.subclassAndWordChars.ready");
 	//Get the startup document and make a buffer for it so it can be accessed like a file
 	attachDefaultDoc();
 }
@@ -2676,6 +2687,7 @@ void ScintillaEditView::expand(size_t& line, bool doExpand, bool force, int visL
 
 void ScintillaEditView::performGlobalStyles()
 {
+	StartupTraceScope trace(L"editor.globalStyles");
 	NppParameters& nppParams = NppParameters::getInstance();
 	StyleArray & stylers = nppParams.getMiscStylerArray();
 

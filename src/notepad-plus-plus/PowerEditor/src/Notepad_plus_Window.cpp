@@ -33,13 +33,16 @@ HWND Notepad_plus_Window::gNppHWND = NULL;
 void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLine, CmdLineParams *cmdLineParams)
 {
 	startupTrace("window.init.begin");
+	startupTrace("begin", L"window.noActivateSetup");
 	StartupNoActivate::setBackgroundMode(cmdLineParams->_noActivate);
 	StartupNoActivate noActivate(true);
+	startupTrace("end", L"window.noActivateSetup");
 	_startupNoActivate = cmdLineParams->_noActivate;
 	time_t timestampBegin = 0;
 	if (cmdLineParams->_showLoadingTime)
 		timestampBegin = time(NULL);
 
+	startupTrace("begin", L"window.registerClass");
 	Window::init(hInst, parent);
 	WNDCLASS nppClass;
 
@@ -63,6 +66,7 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		throw std::runtime_error("Notepad_plus_Window::init : RegisterClass() function failed");
 	}
 
+	startupTrace("end", L"window.registerClass");
 	NppParameters& nppParams = NppParameters::getInstance();
 	NppGUI & nppGUI = nppParams.getNppGUI();
 	if (cmdLineParams->_simpleMode)
@@ -81,6 +85,7 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 
 	_hIconAbsent = ::LoadIcon(hInst, MAKEINTRESOURCE(IDI_ICONABSENT));
 
+	startupTrace("begin", L"window.createWindow");
 	_hSelf = ::CreateWindowEx(
 		WS_EX_ACCEPTFILES | (_notepad_plus_plus_core._nativeLangSpeaker.isRTL()?WS_EX_LAYOUTRTL:0),
 		_className,
@@ -97,10 +102,12 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		throw std::runtime_error("Notepad_plus_Window::init : CreateWindowEx() function return null");
 
 
+	startupTrace("end", L"window.createWindow");
 	startupTrace("window.created");
 
 	gNppHWND = _hSelf;
 
+	startupTrace("begin", L"window.initialPlacement");
 	if (cmdLineParams->isPointValid())
 	{
 		::MoveWindow(_hSelf, cmdLineParams->_point.x, cmdLineParams->_point.y, nppGUI._appPos.right, nppGUI._appPos.bottom, TRUE);
@@ -128,10 +135,14 @@ void Notepad_plus_Window::init(HINSTANCE hInst, HWND parent, const TCHAR *cmdLin
 		::SetWindowPlacement(_hSelf,&posInfo);
 	}
 
+	startupTrace("end", L"window.initialPlacement");
 	if (_editorFirstStartup && _notepad_plus_plus_core.prepareStartupDocument(cmdLine, *cmdLineParams))
 	{
 		if (!cmdLineParams->_noActivate)
+		{
+			StartupTraceScope trace(L"window.noActivateFinish");
 			noActivate.finish();
+		}
 		presentStartupWindow(true);
 		_lastInputTick = ::GetTickCount();
 		_startupTimer = reinterpret_cast<UINT_PTR>(this) + 1;
@@ -528,6 +539,7 @@ void Notepad_plus_Window::presentStartupWindow(bool editorOnly)
 	const auto& nppGUI = NppParameters::getInstance().getNppGUI();
 	// Avoid exposing an animated, only partly composed startup surface.
 	// Resolve optionally so systems without DWM keep the original path.
+	startupTrace("begin", L"window.dwmPreparation");
 	HMODULE dwm = ::LoadLibraryExW(L"dwmapi.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
 	using SetAttribute = HRESULT(WINAPI*)(HWND, DWORD, LPCVOID, DWORD);
 	using FlushComposition = HRESULT(WINAPI*)();
@@ -541,6 +553,7 @@ void Notepad_plus_Window::presentStartupWindow(bool editorOnly)
 	BOOL cloak = TRUE;
 	bool startupCloaked = setAttribute && SUCCEEDED(setAttribute(_hSelf,
 		DWMWA_CLOAK, &cloak, sizeof(cloak)));
+	startupTrace("end", L"window.dwmPreparation");
 	if (cmdLineParams->_noActivate)
 	{
 		startupTrace("begin", L"window.showWithoutActivation");
@@ -550,14 +563,20 @@ void Notepad_plus_Window::presentStartupWindow(bool editorOnly)
 		// Show-only SetWindowPos need not send WM_SIZE. Child layout uses
 		// effective visibility, so run it after showing and before painting.
 	}
-	else if (cmdLineParams->isPointValid())
-		::ShowWindow(_hSelf, SW_SHOW);
 	else
-		::ShowWindow(_hSelf, nppGUI._isMaximized ? SW_MAXIMIZE : SW_SHOW);
+	{
+		StartupTraceScope trace(L"window.showWithActivation");
+		if (cmdLineParams->isPointValid())
+			::ShowWindow(_hSelf, SW_SHOW);
+		else
+			::ShowWindow(_hSelf, nppGUI._isMaximized ? SW_MAXIMIZE : SW_SHOW);
+	}
+	startupTrace("begin", L"window.initialLayout");
 	if (editorOnly)
 		::SendMessage(_hSelf, WM_SIZE, SIZE_RESTORED, 0);
 	else
 		_notepad_plus_plus_core.commitStartupLayout();
+	startupTrace("end", L"window.initialLayout");
 	// Paint the themed client and children before READY handlers can block
 	// the UI thread. Otherwise DWM can expose their unpainted white surfaces.
 	startupTrace("begin", L"window.initialRedraw");
@@ -579,7 +598,10 @@ void Notepad_plus_Window::presentStartupWindow(bool editorOnly)
 	{
 		auto flush = reinterpret_cast<FlushComposition>(::GetProcAddress(dwm, "DwmFlush"));
 		if (flush)
+		{
+			StartupTraceScope trace(L"window.dwmFlush");
 			flush();
+		}
 		// Later minimize, restore and maximize animations retain their default.
 		disableTransition = FALSE;
 		setAttribute(_hSelf, DWMWA_TRANSITIONS_FORCEDISABLED, &disableTransition, sizeof(disableTransition));

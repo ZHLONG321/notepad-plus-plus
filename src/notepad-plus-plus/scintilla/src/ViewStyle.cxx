@@ -26,6 +26,7 @@
 #include "LineMarker.h"
 #include "Style.h"
 #include "ViewStyle.h"
+#include "../../PowerEditor/src/StartupTrace.h"
 
 using namespace Scintilla;
 
@@ -286,6 +287,7 @@ void ViewStyle::Init(size_t stylesSize_) {
 }
 
 void ViewStyle::Refresh(Surface &surface, int tabInChars) {
+	StartupTraceScope trace(L"editor.styleRefresh");
 	fonts.clear();
 
 	selbar = Platform::Chrome();
@@ -302,17 +304,20 @@ void ViewStyle::Refresh(Surface &surface, int tabInChars) {
 		CreateAndAddFont(style);
 	}
 
+	startupTrace("editor.styleRefresh.fontSet.ready");
 	// Ask platform to allocate each unique font.
 	for (std::pair<const FontSpecification, std::unique_ptr<FontRealised>> &font : fonts) {
 		font.second->Realise(surface, zoomLevel, technology, font.first);
 	}
 
+	startupTrace("editor.styleRefresh.fontRealization.ready");
 	// Set the platform font handle and measurements for each style.
 	for (Style &style : styles) {
 		FontRealised *fr = Find(style);
 		style.Copy(fr->font, *fr);
 	}
 
+	startupTrace("editor.styleRefresh.fontAssignment.ready");
 	indicatorsDynamic = std::any_of(indicators.cbegin(), indicators.cend(),
 		[](const Indicator &indicator) noexcept { return indicator.IsDynamic(); });
 

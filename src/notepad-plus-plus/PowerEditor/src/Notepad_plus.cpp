@@ -193,18 +193,31 @@ Notepad_plus::~Notepad_plus()
 
 void Notepad_plus::initStartupEditor(HWND hwnd)
 {
+	StartupTraceScope trace(L"startup.editor.init");
 	_startupEditorOnly = true;
 	_pEditView = &_mainEditView;
 	_pNonEditView = &_subEditView;
-	_mainEditView.init(_pPublicInterface->getHinst(), hwnd);
-	_subEditView.init(_pPublicInterface->getHinst(), hwnd);
-	_fileEditView.init(_pPublicInterface->getHinst(), hwnd);
+	{
+		StartupTraceScope trace(L"startup.editor.main.init");
+		_mainEditView.init(_pPublicInterface->getHinst(), hwnd);
+	}
+	{
+		StartupTraceScope trace(L"startup.editor.sub.init");
+		_subEditView.init(_pPublicInterface->getHinst(), hwnd);
+	}
+	{
+		StartupTraceScope trace(L"startup.editor.file.init");
+		_fileEditView.init(_pPublicInterface->getHinst(), hwnd);
+	}
 	MainFileManager.init(this, &_fileEditView);
+	startupTrace("startup.editor.fileManager.ready");
 	_mainWindowStatus = WindowMainActive;
 	_activeView = MAIN_VIEW;
 	_mainMenuHandle = ::GetMenu(hwnd);
 	::SetMenu(hwnd, nullptr);
+	startupTrace("begin", L"startup.editor.fontEnumeration");
 	NppParameters::getInstance().setFontList(hwnd);
+	startupTrace("end", L"startup.editor.fontEnumeration");
 	startupTrace("startup.editor.fonts.ready");
 	configureEditViews();
 	startupTrace("startup.editor.created");
@@ -212,6 +225,7 @@ void Notepad_plus::initStartupEditor(HWND hwnd)
 
 void Notepad_plus::configureEditViews()
 {
+	StartupTraceScope trace(L"views.configure");
 	const auto& svp = NppParameters::getInstance().getSVP();
 	_mainEditView.showIndentGuideLine(svp._indentGuideLineShow);
 	_subEditView.showIndentGuideLine(svp._indentGuideLineShow);
@@ -220,11 +234,13 @@ void Notepad_plus::configureEditViews()
 	::SendMessage(_pPublicInterface->getHSelf(), NPPM_INTERNAL_SETCARETBLINKRATE, 0, 0);
 
 
+	startupTrace("views.caretAndIndent.ready");
 	//Marker Margin config
 	_mainEditView.setMakerStyle(svp._folderStyle);
 	_subEditView.setMakerStyle(svp._folderStyle);
 	startupTrace("views.markers.ready");
 	_mainEditView.defineDocType(_mainEditView.getCurrentBuffer()->getLangType());
+	startupTrace("views.main.doctype.ready");
 	_subEditView.defineDocType(_subEditView.getCurrentBuffer()->getLangType());
 	startupTrace("views.doctype.ready");
 
@@ -264,7 +280,9 @@ void Notepad_plus::configureEditViews()
 	_mainEditView.showWrapSymbol(svp._wrapSymbolShow);
 	_subEditView.showWrapSymbol(svp._wrapSymbolShow);
 
+	startupTrace("views.wrapAndDisplay.ready");
 	_mainEditView.performGlobalStyles();
+	startupTrace("views.main.styles.ready");
 	_subEditView.performGlobalStyles();
 	startupTrace("views.styles.ready");
 
@@ -277,6 +295,7 @@ void Notepad_plus::configureEditViews()
 	_mainEditView.showMargin(ScintillaEditView::_SC_MARGE_SYBOLE, svp._bookMarkMarginShow);
 	_subEditView.showMargin(ScintillaEditView::_SC_MARGE_SYBOLE, svp._bookMarkMarginShow);
 
+	startupTrace("views.margins.ready");
 	::SendMessage(_pPublicInterface->getHSelf(), NPPM_INTERNAL_SETMULTISELCTION, 0, 0);
 
 	// Make backspace or delete work with multiple selections

@@ -511,6 +511,7 @@ ATOM ScintillaWin::scintillaClassAtom = 0;
 ATOM ScintillaWin::callClassAtom = 0;
 
 ScintillaWin::ScintillaWin(HWND hwnd) {
+	StartupTraceScope trace(L"editor.win32.constructor");
 
 	lastKeyDownConsumed = false;
 	lastHighSurrogateChar = 0;
@@ -572,7 +573,9 @@ void ScintillaWin::Init() {
 	// Initialize COM.  If the app has already done this it will have
 	// no effect.  If the app hasn't, we really shouldn't ask them to call
 	// it just so this internal feature works.
+	startupTrace("begin", L"editor.win32.oleInitialize");
 	hrOle = ::OleInitialize(nullptr);
+	startupTrace("end", L"editor.win32.oleInitialize");
 
 	// Find SetCoalescableTimer which is only available from Windows 8+
 	HMODULE user32 = ::GetModuleHandleW(L"user32.dll");

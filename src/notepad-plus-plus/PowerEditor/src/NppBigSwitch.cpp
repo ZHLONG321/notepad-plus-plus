@@ -121,7 +121,10 @@ LRESULT Notepad_plus_Window::runProc(HWND hwnd, UINT message, WPARAM wParam, LPA
 		{
 			try
 			{
+				StartupTraceScope trace(L"window.WM_CREATE");
+				startupTrace("begin", L"window.darkTitleBar");
 				NppDarkMode::setDarkTitleBar(hwnd);
+				startupTrace("end", L"window.darkTitleBar");
 
 				_notepad_plus_plus_core._pPublicInterface = this;
 				LRESULT lRet = TRUE;
@@ -130,6 +133,7 @@ LRESULT Notepad_plus_Window::runProc(HWND hwnd, UINT message, WPARAM wParam, LPA
 				else
 					lRet = _notepad_plus_plus_core.init(hwnd);
 
+				startupTrace("window.core.ready");
 				if (NppDarkMode::isEnabled() && NppDarkMode::isExperimentalSupported())
 				{
 					RECT rcClient;
