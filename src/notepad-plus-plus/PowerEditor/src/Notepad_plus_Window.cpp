@@ -341,7 +341,16 @@ void Notepad_plus_Window::finishStartup(bool incremental)
 	// Saved dialogs can request focus from WM_INITDIALOG even while their owner
 	// is hidden. Finish constructing the window tree before allowing a normal
 	// launch to activate it and initialize the input method once.
-	if (!cmdLineParams->_noActivate)
+	// The editor-first window has already been presented. Completing its
+	// session must not reactivate it after the user switched applications.
+	DWORD foregroundProcess = 0;
+	::GetWindowThreadProcessId(::GetForegroundWindow(), &foregroundProcess);
+	const bool activateAtCompletion = !cmdLineParams->_noActivate &&
+		(!_editorFirstStartup || !::IsWindowVisible(_hSelf) ||
+			foregroundProcess == ::GetCurrentProcessId());
+	startupTrace(activateAtCompletion ? "startup.completion.activation.allowed" :
+		"startup.completion.activation.suppressed");
+	if (activateAtCompletion)
 		noActivate.finish();
 	// Present only after layout, files and saved panels have been restored.
 	const bool publishComplete = !_editorFirstStartup && !_isPrelaunch &&
@@ -380,7 +389,7 @@ void Notepad_plus_Window::finishStartup(bool incremental)
 		_notepad_plus_plus_core._pTrayIco->doTrayIcon(ADD);
 	}
 	startupTrace("window.shown");
-	if (!cmdLineParams->_noActivate)
+	if (activateAtCompletion)
 		::SendMessage(_hSelf, WM_ACTIVATE, WA_ACTIVE, 0);
 
 	// Notify plugins that Notepad++ is ready
@@ -664,7 +673,10 @@ void Notepad_plus_Window::loadOneDelayedPlugin(bool beforePresentation)
 
 	_delayedLoadInProgress = true;
 	struct ResetBusy { bool& busy; ~ResetBusy() { busy = false; } } resetBusy{_delayedLoadInProgress};
-	StartupNoActivate noActivate(beforePresentation || _startupNoActivate);
+	// Automatic plugin callbacks and saved panels must not take the foreground
+	// back from another application after an ordinary foreground launch.
+	StartupNoActivate noActivate(beforePresentation || _startupNoActivate ||
+		foregroundProcess != ::GetCurrentProcessId());
 	auto& params = NppParameters::getInstance();
 	const auto priorShortcuts = params.getPluginCommandList();
 	const int index = manager.loadNextDelayedPlugin();
