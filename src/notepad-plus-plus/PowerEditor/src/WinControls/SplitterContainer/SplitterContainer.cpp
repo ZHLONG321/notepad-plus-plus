@@ -199,6 +199,10 @@ LRESULT SplitterContainer::runProc(UINT message, WPARAM wParam, LPARAM lParam)
 		{
 			RECT rc0, rc1;
 			getClientRect(rc0);
+			// The views may already be visible before this container receives
+			// its first layout. Do not collapse them to its empty initial bounds.
+			if (rc0.right <= 0 || rc0.bottom <= 0)
+				return TRUE;
 
 			rc1.top = rc0.top += _y;
 			rc1.bottom = rc0.bottom;

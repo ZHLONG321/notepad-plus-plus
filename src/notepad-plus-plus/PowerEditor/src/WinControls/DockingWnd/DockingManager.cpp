@@ -398,7 +398,9 @@ void DockingManager::reSizeTo(RECT & rc)
 	// prepare size of work area
 	_rcWork	= rc;
 
-	if (_isInitialized == FALSE)
+	// Panel state can request a resize before the owner supplies its first
+	// client bounds. Keep the live editor intact until those bounds arrive.
+	if (_isInitialized == FALSE || rc.right <= 0 || rc.bottom <= 0)
 		return;
 
 	// set top container
