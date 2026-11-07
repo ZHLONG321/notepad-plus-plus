@@ -722,6 +722,15 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR pCmdLine, int)
 			going = ::GetMessageW(&msg, NULL, 0, 0) != 0;
 			if (going)
 			{
+				if (startupTraceHandle() != INVALID_HANDLE_VALUE &&
+					!::IsWindow(notepad_plus_plus.getHSelf()))
+				{
+					wchar_t detail[128] = {};
+					swprintf_s(detail, L"hwnd=%p message=%04X wParam=%llX lParam=%llX",
+						msg.hwnd, msg.message, static_cast<unsigned long long>(msg.wParam),
+						static_cast<unsigned long long>(msg.lParam));
+					startupTrace("shutdown.message.afterDestroy", detail);
+				}
 				if (notepad_plus_plus.translateStartupModeKey(msg))
 					continue;
 				notepad_plus_plus.onInputMessage(msg);

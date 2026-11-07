@@ -103,7 +103,9 @@ inline LONG CALLBACK observe(EXCEPTION_POINTERS* exception)
                 WriteFile(output, line, static_cast<DWORD>(size), &written, nullptr);
             }
         }
-        for (unsigned frame = 0; frame < 64 && context.Rip; ++frame)
+        // A null indirect call still leaves its caller's return address on the
+        // stack. Include that first frame before applying the unwind terminator.
+        for (unsigned frame = 0; frame < 64 && (frame == 0 || context.Rip); ++frame)
         {
             DWORD64 imageBase = 0;
             PRUNTIME_FUNCTION function = RtlLookupFunctionEntry(context.Rip, &imageBase, nullptr);
