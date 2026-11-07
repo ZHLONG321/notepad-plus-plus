@@ -155,9 +155,6 @@ def run(runtime, case, operations, original, validator=None, observe=None, nativ
         report['traceback'] = traceback.format_exc()
         print('FAILED', repr(exc), flush=True)
     finally:
-        observer.pump()
-        report['foreground_events'] = [e for e in observer.events if process and e['pid']==process.pid]
-        observer.close()
         if main_hwnd:
             # Some commands create result documents. All buffers in this
             # -nosession fixture belong to this run, including those results.
@@ -181,6 +178,12 @@ def run(runtime, case, operations, original, validator=None, observe=None, nativ
                 report['process_exit'] = process.wait(timeout=5)
                 report['status'] = 'failed'
                 report['error'] = 'Fixture process failed to close normally'
+        # Keep observing through shutdown, including late plugin activation.
+        observer.pump()
+        report['foreground_events'] = [e for e in observer.events if process and e['pid']==process.pid]
+        if report.get('process_exit') != 0 or report['foreground_events']:
+            report['status'] = 'failed'
+        observer.close()
         (evidence/'result.json').write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding='utf-8')
         print('RESULT', report['status'], evidence.relative_to(ROOT), flush=True)
     return report

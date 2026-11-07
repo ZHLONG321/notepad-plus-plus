@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import stat
 import subprocess
 import time
 from typing import Any
@@ -41,21 +42,29 @@ def main() -> None:
         for item in document['copies']:
             retained[Path(item['path'])] = (runtime/item['path']).read_bytes()
     report: dict[str, Any] = dict(status='incomplete', runs=[], floating=args.floating,
-                  exe_sha256=hashlib.sha256((runtime/'notepad++.exe').read_bytes()).hexdigest())
+                  exe_sha256=hashlib.sha256((runtime/'notepad++.exe').read_bytes()).hexdigest(),
+                  runner_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
     observer = Observer()
     process, hwnd = None, None
+    target_pids: set[int] = set()
     try:
         prepare(runtime, args.floating, folder)
         required = json.loads((OUT/'audit.json').read_text(encoding='utf-8'))['plugins']
+        for plugin in required:
+            dll = runtime/'plugins'/plugin['name']/(plugin['name']+'.dll')
+            assert hashlib.sha256(dll.read_bytes()).hexdigest() == plugin['sha256'], plugin['name']
+        report['original_plugin_count'] = len(required)
         for index in range(2):
             env = dict(os.environ, APPDATA=str(runtime/'appdata'), LOCALAPPDATA=str(runtime/'localappdata'),
                        TEMP=str(runtime/'temp'), TMP=str(runtime/'temp'), NPP_STARTUP_TRACE=str(folder/f'run-{index}.tsv'))
+            env.pop('NPP_STARTUP_TSF', None)
             command = [str(runtime/'notepad++.exe'), '-multiInst', '-noActivate', '-settingsDir=settings']
             if index == 0:
                 command.append('-simple')
             print('START panel recovery', index, args.floating, flush=True)
             process = subprocess.Popen(command, cwd=runtime, env=env)
             pid = process.pid
+            target_pids.add(pid)
             hwnd = wait_for(lambda: next((w['hwnd'] for w in win.windows(pid)
                 if w['class']=='Notepad++' and w['visible'] and uncloaked(w['hwnd'])), None), observer, process)
             assert not win.U.GetMenu(hwnd), 'Saved editor-only mode must survive restarting'
@@ -67,20 +76,24 @@ def main() -> None:
             panels = wait_for(ready, observer, process)
             assert not any(w['visible'] for w in panels)
             assert not any(w['visible'] for w in snapshot(process.pid) if w['class']=='#32770')
-            assert win.U.PostMessageW(hwnd, 0x111, 44110, 0)
+            # Complete the host command before reading the final panel layout.
+            assert win.message(hwnd, 2072, 0, 44110, timeout=3000) is not None
             def visible_panels():
                 return [w for w in snapshot(pid) if w['class']=='#32770' and w['title']=='Python Script' and w['visible']]
             shown = wait_for(visible_panels, observer, process)
             panel = shown[0]
+            assert win.U.GetMenu(hwnd)
             assert (panel['root'] != hwnd) == args.floating
             panel_rect = win.rect(panel['root']) if args.floating else panel['rect']
             if args.floating:
                 assert panel_rect[:2] == (220, 180)
                 assert panel_rect[2:] == (560, 300)
+            if index:
+                assert tuple(panel_rect) == tuple(report['runs'][0]['panel_rect'])
             assert inspect(process.pid)['passed']
             # A requested native render documents panel content, without timing claims.
             image = print_window(panel['root'] if args.floating else hwnd, process.pid, folder/f'panel-restored-{index}.png')
-            assert win.U.PostMessageW(hwnd, 0x111, 44110, 0)
+            assert win.message(hwnd, 2072, 0, 44110, timeout=3000) is not None
             wait_for(lambda: not visible_panels(), observer, process)
             assert not win.U.GetMenu(hwnd)
             assert win.U.PostMessageW(hwnd, 0x10, 0, 0)
@@ -109,13 +122,26 @@ def main() -> None:
                 process.terminate()
                 process.wait(timeout=3)
                 report['forced_failure_exit'] = True
+        observer.pump()
+        report['foreground_events'] = [event for event in observer.events if event['pid'] in target_pids]
+        if report['foreground_events'] or report.get('forced_failure_exit'):
+            report['status'] = 'failed'
         observer.close()
         (folder/'result.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
         for relative, content in retained.items():
             path = runtime/relative
             if not path.exists() or path.read_bytes() != content:
-                path.write_bytes(content)
+                mode = path.stat().st_mode if path.exists() else None
+                if mode is not None:
+                    path.chmod(mode | stat.S_IWRITE)
+                try:
+                    path.write_bytes(content)
+                finally:
+                    if mode is not None:
+                        path.chmod(mode)
         print('RESULT', report['status'], folder.name, flush=True)
+    if report['status'] != 'passed':
+        raise SystemExit(1)
 
 
 if __name__ == '__main__':
