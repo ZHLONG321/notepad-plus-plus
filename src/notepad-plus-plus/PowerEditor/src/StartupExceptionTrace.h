@@ -23,7 +23,9 @@ struct UnloadEvent
 using GetUnloadEventsEx = VOID (WINAPI*)(PULONG*, PULONG*, PVOID*);
 static PULONG unloadElementSize = nullptr;
 static PULONG unloadElementCount = nullptr;
-static PVOID unloadEvents = nullptr;
+// Ex returns the address of the loader's array-pointer variable. Its value can
+// change when the loader first allocates the dynamic event array.
+static PVOID unloadEventsLocation = nullptr;
 
 inline void writeRow(DWORD code, const char* kind, unsigned index,
     DWORD64 ip, DWORD64 sp, DWORD64 value)
@@ -75,10 +77,12 @@ inline LONG CALLBACK observe(EXCEPTION_POINTERS* exception)
         }
         const ULONG stride = unloadElementSize ? *unloadElementSize : 0;
         const ULONG count = unloadElementCount ? *unloadElementCount : 0;
-        for (ULONG i = 0; unloadEvents && stride >= sizeof(UnloadEvent) && i < count; ++i)
+        const PVOID events = unloadEventsLocation ?
+            *static_cast<PVOID*>(unloadEventsLocation) : nullptr;
+        for (ULONG i = 0; events && stride >= sizeof(UnloadEvent) && i < count; ++i)
         {
             UnloadEvent image = {};
-            memcpy(&image, static_cast<const BYTE*>(unloadEvents) +
+            memcpy(&image, static_cast<const BYTE*>(events) +
                 static_cast<SIZE_T>(i) * stride, sizeof(image));
             const DWORD64 base = reinterpret_cast<DWORD64>(image.base);
             if (!base || context.Rip < base || context.Rip - base >= image.size)
@@ -141,7 +145,7 @@ inline void install()
     auto getUnloadEvents = reinterpret_cast<GetUnloadEventsEx>(
         GetProcAddress(GetModuleHandleW(L"ntdll.dll"), "RtlGetUnloadEventTraceEx"));
     if (getUnloadEvents)
-        getUnloadEvents(&unloadElementSize, &unloadElementCount, &unloadEvents);
+        getUnloadEvents(&unloadElementSize, &unloadElementCount, &unloadEventsLocation);
     wchar_t path[32768] = {};
     DWORD length = GetEnvironmentVariableW(L"NPP_STARTUP_TRACE", path, 32768);
     const wchar_t suffix[] = L".exceptions.tsv";
