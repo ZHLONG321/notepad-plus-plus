@@ -672,10 +672,10 @@ void Notepad_plus_Window::loadOneDelayedPlugin()
 
 	_delayedLoadInProgress = true;
 	struct ResetBusy { bool& busy; ~ResetBusy() { busy = false; } } resetBusy{_delayedLoadInProgress};
-	// Automatic plugin callbacks and saved panels must not take the foreground
-	// back from another application after an ordinary foreground launch.
-	StartupNoActivate noActivate(_startupNoActivate ||
-		foregroundProcess != ::GetCurrentProcessId());
+	// Automatic initialization must preserve the active editor even when this
+	// process is foreground. Hidden plugin dialogs can otherwise take focus
+	// from the already usable editor while their READY callback runs.
+	StartupNoActivate noActivate(true);
 	const int index = prepareNextDelayedPlugin();
 	if (index < 0)
 		return;
