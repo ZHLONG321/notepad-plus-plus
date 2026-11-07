@@ -12,4 +12,5 @@ __pycache__/
 !/ref/notepad-startup-analysis/
 /ref/notepad-startup-analysis/*
 !/ref/notepad-startup-analysis/README.md
+!/ref/notepad-startup-analysis/qq-proxy.props
 !/ref/notepad-startup-analysis/scripts/
