@@ -31,6 +31,9 @@
 #include "NppDarkMode.h"
 #include "StartupTrace.h"
 #include "StartupNoActivate.h"
+#if defined(NPP_QQ_PROXY_PROBE)
+#include <imm.h>
+#endif
 
 using namespace std;
 
@@ -93,6 +96,28 @@ LRESULT CALLBACK Notepad_plus_Window::Notepad_plus_Proc(HWND hwnd, UINT message,
 
 LRESULT Notepad_plus_Window::runProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+#if defined(NPP_QQ_PROXY_PROBE)
+    // Diagnostic builds query IME state on its owning thread before plugins load.
+    static const UINT imeProbe = ::RegisterWindowMessageW(L"Notepad.StartupImeProbe.93249AC7-8C55-4464-83B7-412D8A633C94");
+    if (message == imeProbe && imeProbe)
+    {
+        HWND editor = reinterpret_cast<HWND>(wParam);
+        wchar_t name[32] = {};
+        if (!::IsChild(hwnd, editor) || ::GetWindowThreadProcessId(editor, nullptr) != ::GetCurrentThreadId() ||
+            !::GetClassNameW(editor, name, 32) || wcscmp(name, L"Scintilla")) return -1;
+        HIMC context = ::ImmGetContext(editor);
+        if (!context) return -1;
+        LRESULT result = -1;
+        DWORD conversion = 0, sentence = 0;
+        if (lParam == 1) result = ::ImmGetOpenStatus(context);
+        else if ((lParam == 2 || lParam == 3) && ::ImmGetConversionStatus(context, &conversion, &sentence))
+            result = lParam == 2 ? conversion : sentence;
+        else if (lParam == 4 || lParam == 5) result = ::ImmSetOpenStatus(context, lParam == 5);
+        ::ImmReleaseContext(editor, context);
+        return result;
+    }
+#endif
+
 	if ((message == WM_COMMAND && !lParam && LOWORD(wParam) == IDM_VIEW_SIMPLEMODE) ||
 		(message == NPPM_MENUCOMMAND && lParam == IDM_VIEW_SIMPLEMODE))
 	{
