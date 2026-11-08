@@ -82,7 +82,9 @@ void DocTabView::addBuffer(BufferID buffer)
 	::SendMessage(_hSelf, TCM_INSERTITEM, _nbItem++, reinterpret_cast<LPARAM>(&tie));
 	// Insert the final label and image together, without looking up and
 	// rewriting the newly inserted item before the first layout.
-	if (!_hideTabBarStatus && getTabBarThickness() != _tabBarThickness)
+	// Hidden tabs receive their geometry from the owner before display. Avoid
+	// forcing native row calculation after each session item while hidden.
+	if (!_hideTabBarStatus && ::IsWindowVisible(_hSelf) && getTabBarThickness() != _tabBarThickness)
 		::SendMessage(_hParent, WM_SIZE, 0, 0);
 }
 
@@ -104,7 +106,7 @@ bool DocTabView::activateBuffer(BufferID buffer)
 	activateAt(indexToActivate);
 	// Native tabs arrange their own rows on selection. The host only needs to
 	// resize the editor when the strip actually consumes a different extent.
-	if (!_hideTabBarStatus && getTabBarThickness() != _tabBarThickness)
+	if (!_hideTabBarStatus && ::IsWindowVisible(_hSelf) && getTabBarThickness() != _tabBarThickness)
 		::SendMessage(_hParent, WM_SIZE, 0, 0);
 	return true;
 }
@@ -179,7 +181,7 @@ void DocTabView::bufferUpdated(Buffer * buffer, int mask)
 
 	// Native tabs recalculate their rows when an item changes. Relayout the
 	// host only when those rows change the space available to the editor.
-	if ((mask & BufferChangeFilename) && !_hideTabBarStatus
+	if ((mask & BufferChangeFilename) && !_hideTabBarStatus && ::IsWindowVisible(_hSelf)
 		&& getTabBarThickness() != _tabBarThickness)
 		::SendMessage(_hParent, WM_SIZE, 0, 0);
 }
@@ -194,7 +196,7 @@ void DocTabView::setBuffer(size_t index, BufferID id)
 	TCITEM tie = makeBufferItem(MainFileManager.getBufferByID(id), BufferChangeMask, encodedLabel, true);
 	::SendMessage(_hSelf, TCM_SETITEM, index, reinterpret_cast<LPARAM>(&tie));
 
-	if (!_hideTabBarStatus && getTabBarThickness() != _tabBarThickness)
+	if (!_hideTabBarStatus && ::IsWindowVisible(_hSelf) && getTabBarThickness() != _tabBarThickness)
 		::SendMessage(_hParent, WM_SIZE, 0, 0);
 }
 
