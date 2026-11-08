@@ -13,6 +13,7 @@ import traceback
 from typing import Any
 
 from foreground_events import Observer
+from keyboard_input_guard import INPUT_TAG, KeyboardInputGuard, wait_for_input_idle  # pyright: ignore[reportImplicitRelativeImport]
 from measure_posted_input import prepare
 from record_startup_menu import WindowCapture, read_rgb  # pyright: ignore[reportMissingImports]
 from window_surface import uncloaked
@@ -105,6 +106,7 @@ def run(runtime, index, simple=False, trace=False, early_capture=False):
     report['late_foreground_restorations'] = []
     process, hwnd, editor = None, None, None
     foreground_released = False
+    input_guard = None
 
     def observe_after_input():
         observer.pump()
@@ -128,6 +130,12 @@ def run(runtime, index, simple=False, trace=False, early_capture=False):
 
     try:
         assert report['exe_sha256'] == metadata['exe_sha256'], 'Runtime binary differs from source metadata'
+        if not wait_for_input_idle():
+            raise RuntimeError('Desktop remained active; no foreground trial launched')
+        input_guard = KeyboardInputGuard()
+        # The user may have changed applications while the idle gate waited.
+        original_foreground = win.U.GetForegroundWindow()
+        report['original_foreground'] = original_foreground
         environment = dict(os.environ, APPDATA=str(runtime/'appdata'), LOCALAPPDATA=str(runtime/'localappdata'),
                            TEMP=str(runtime/'temp'), TMP=str(runtime/'temp'))
         environment.pop('NPP_STARTUP_TRACE', None)
@@ -142,8 +150,10 @@ def run(runtime, index, simple=False, trace=False, early_capture=False):
             command.append('-simple')
         process = subprocess.Popen(command, cwd=runtime, env=environment)
         report['pid'] = process.pid
+        input_guard.target_pid = process.pid
         while time.perf_counter()-started < 5:
             observer.pump()
+            input_guard.check()
             assert process.poll() is None
             matches = [w for w in win.windows(process.pid) if w['class']=='Notepad++'
                        and w['visible'] and (early_capture or uncloaked(w['hwnd']))]
@@ -155,11 +165,13 @@ def run(runtime, index, simple=False, trace=False, early_capture=False):
         report['capture_attachment_ms'] = (time.perf_counter()-started)*1000
         report['cloaked_at_capture_attachment'] = not uncloaked(hwnd)
         recorder.start(hwnd, process.pid)
+        input_guard.check()
         report['capture_ready_ms'] = (time.perf_counter()-started)*1000
         baseline_frames = 1 if early_capture else 2
         while (recorder.state()['retained_frames'] < baseline_frames or not uncloaked(hwnd)) \
                 and time.perf_counter()-started < 5:
             observer.pump()
+            input_guard.check()
             time.sleep(.002)
         report['empty_frame_count_before_input'] = recorder.state()['retained_frames']
         report['first_frame_observed_ms'] = (time.perf_counter()-started)*1000
@@ -172,21 +184,24 @@ def run(runtime, index, simple=False, trace=False, early_capture=False):
         report['capture_screen_bounds'] = [bounds.left, bounds.top, bounds.right, bounds.bottom]
         assert not any(win.U.GetAsyncKeyState(key) & 0x8000 for key in (0x10, 0x11, 0x12, 0x5b, 0x5c))
         events = (win.INPUT*2)(
-            win.INPUT(type=1, ki=win.KEYBDINPUT(wVk=0x31, wScan=0x02)),
-            win.INPUT(type=1, ki=win.KEYBDINPUT(wVk=0x31, wScan=0x02, dwFlags=2)))
+            win.INPUT(type=1, ki=win.KEYBDINPUT(wVk=0x31, wScan=0x02, dwExtraInfo=INPUT_TAG)),
+            win.INPUT(type=1, ki=win.KEYBDINPUT(wVk=0x31, wScan=0x02, dwFlags=2, dwExtraInfo=INPUT_TAG)))
         assert win.U.GetForegroundWindow() == hwnd and focused_editor(hwnd, process.pid) == editor
+        input_guard.check()
         report['key_sent_ms'] = (time.perf_counter()-started)*1000
         report['input_injected'] = True
         report['sendinput_event_count'] = win.U.SendInput(2, events, C.sizeof(win.INPUT))
         assert report['sendinput_event_count'] == 2
         while time.perf_counter()-started < 5:
             observer.pump()
+            input_guard.check()
             if win.message(editor, 2006, timeout=30) == 1:
                 break
             time.sleep(.002)
         assert win.message(editor, 2006, timeout=500) == 1
         assert win.message(editor, 2007, 0, timeout=500) == ord('1')
         report['document_contains_character_ms'] = (time.perf_counter()-started)*1000
+        input_guard.check()
         # Restore after the character reached the owned editor, not while its input was queued.
         report['foreground_restoration'] = restore_foreground(original_foreground, hwnd, observer)
         report['foreground_after_restore'] = report['foreground_restoration']['observed']
@@ -263,8 +278,12 @@ def run(runtime, index, simple=False, trace=False, early_capture=False):
         report['traceback'] = traceback.format_exc()
         print('FAILED', repr(exc), flush=True)
     finally:
-        if original_foreground and hwnd and win.U.GetForegroundWindow() == hwnd:
-            report['final_foreground_restoration'] = restore_foreground(original_foreground, hwnd, observer)
+        current = win.U.GetForegroundWindow()
+        owner = W.DWORD()
+        win.U.GetWindowThreadProcessId(current, C.byref(owner))
+        if original_foreground and process and owner.value == process.pid:
+            # Interference can arrive before main-window discovery finishes.
+            report['final_foreground_restoration'] = restore_foreground(original_foreground, current, observer)
         if process and process.poll() is None:
             if editor:
                 win.message(editor, 2014, timeout=500)
@@ -275,6 +294,15 @@ def run(runtime, index, simple=False, trace=False, early_capture=False):
             except subprocess.TimeoutExpired:
                 process.terminate()
                 report['target_exit'] = process.wait(timeout=5)
+        if input_guard:
+            try:
+                input_guard.close()
+                input_guard.check()
+                assert input_guard.tagged_events == report.get('sendinput_event_count', 0)
+            except Exception as exc:
+                report['status'] = 'failed_input_provenance'
+                report['input_provenance_error'] = repr(exc)
+            report['input_provenance'] = input_guard.report()
         # Keep the actual composed pictures even if a later compatibility check fails.
         if not (folder/'frames/capture.json').is_file():
             try:
