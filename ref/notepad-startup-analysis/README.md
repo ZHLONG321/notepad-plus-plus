@@ -67,6 +67,10 @@ notepad++.exe -simple
 
 编辑区使用 Scintilla 自带的 inline 组合文字处理，输入法候选列表仍由输入法提供。开始组合时关闭已有的自动补全列表，临时文字不触发宿主的缩进、括号配对或自动补全；确认后的文字正常处理。原始 Scintilla 通知继续传给插件，取消和撤销由编辑控件管理。主、副编辑区共用此设置，精简模式补齐界面时沿用已有编辑区。
 
+这部分按 Windows 输入消息和 Scintilla 的组合文字标记处理，不按输入法名称分支。应用自己绘制组合文字时，Windows 的 [WM_IME_SETCONTEXT 接口](https://learn.microsoft.com/en-us/windows/win32/intl/wm-ime-setcontext)允许清除 `ISC_SHOWUICOMPOSITIONWINDOW`，同时保留输入法候选列表。Scintilla 的 inline 路径使用这个接口；它不保证输入法内部因此不创建隐藏窗口。
+
+Windows 窗口处理成本可以被不同输入法共同触发，但输入法内部窗口的创建顺序、父子关系和跨进程调用不由同一输入协议规定。下面的隐藏窗口改造只适用于已经核实的引擎调用路径，不能仅按 `CS_IME` 或相同导入函数推广。Windows 的 [TSF UI-less 模式](https://learn.microsoft.com/en-us/windows/win32/tsf/uiless-mode-overview)要求输入服务实现相应接口，不满足条件的输入服务不会激活；为保留其他输入法兼容性，程序不强制启用此模式。
+
 旧脚本即使设置 `NPP_STARTUP_TSF=1`，也不会创建或激活额外的文字服务管理器。启用 `NPP_STARTUP_TRACE` 时会记录 `inputServices.experiment.rejected`，便于识别仍在使用旧实验参数的测量入口。没有常驻或预加载进程。
 
 数字按键显示、后台窗口消息和不显示的独立桌面均不能代替中文组合输入检查。中文通路检查记录输入法开启状态、编辑控件的实际代码页和最终可见文字，并还原临时输入状态；候选框是否出现属于另一个观察范围，未录制时不宣称通过。等待后台初始化完成后再输入的功能检查，不算启动至首字成绩。启动成绩仍以新进程中的真实可见字符为准；输入法功能失败的实验时间不能当作有效优化收益。
