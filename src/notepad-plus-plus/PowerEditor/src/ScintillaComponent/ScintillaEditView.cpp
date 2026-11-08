@@ -374,6 +374,24 @@ LRESULT ScintillaEditView::scintillaNew_Proc(HWND hwnd, UINT Message, WPARAM wPa
 {
 	switch (Message)
 	{
+		case WM_IME_STARTCOMPOSITION:
+			// Candidate selection remains input activity even without queued keys.
+			_imeComposing = true;
+			startupTrace("editor.composition.begin");
+			break;
+
+		case WM_IME_ENDCOMPOSITION:
+		case WM_KILLFOCUS:
+		{
+			// The editor may commit/cancel composition while processing focus loss.
+			// Keep idle initialization blocked throughout that synchronous work.
+			LRESULT result = _callWindowProc(_scintillaDefaultProc, hwnd, Message, wParam, lParam);
+			if (_imeComposing)
+				startupTrace("editor.composition.end");
+			_imeComposing = false;
+			return result;
+		}
+
 		case WM_ERASEBKGND:
 		{
 			if (_initialPaintPending)

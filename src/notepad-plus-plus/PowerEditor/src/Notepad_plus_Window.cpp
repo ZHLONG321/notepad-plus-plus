@@ -662,7 +662,7 @@ void Notepad_plus_Window::loadOneDelayedPlugin()
 		_delayedPluginTimer = 0;
 		return;
 	}
-	if (_delayedLoadInProgress || !_startupEditorPainted || !::IsWindowVisible(_hSelf) ||
+	if (_delayedLoadInProgress || isEditorComposing() || !_startupEditorPainted || !::IsWindowVisible(_hSelf) ||
 		HIWORD(::GetQueueStatus(QS_INPUT | QS_PAINT)))
 		return;
 	// An empty queue immediately after a keystroke is not an input pause.

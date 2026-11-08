@@ -129,7 +129,7 @@ LRESULT Notepad_plus_Window::runProc(HWND hwnd, UINT message, WPARAM wParam, LPA
 	{
 		if (message == WM_TIMER && wParam == _startupTimer)
 		{
-			if (_startupEditorPainted && ::GetTickCount() - _lastInputTick >= 250 &&
+			if (_startupEditorPainted && !isEditorComposing() && ::GetTickCount() - _lastInputTick >= 250 &&
 				!HIWORD(::GetQueueStatus(QS_INPUT | QS_PAINT)))
 				finishStartup(true);
 			return 0;

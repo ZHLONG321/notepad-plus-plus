@@ -216,6 +216,7 @@ public:
 	};
 
 	virtual void init(HINSTANCE hInst, HWND hPere);
+	bool isImeComposing() const { return _imeComposing; }
 
 	LRESULT execute(UINT Msg, WPARAM wParam=0, LPARAM lParam=0) const {
 		try {
@@ -632,6 +633,7 @@ protected:
 	static WNDPROC _scintillaDefaultProc;
 	CallWindowProcFunc _callWindowProc = nullptr;
 	bool _initialPaintPending = true;
+	bool _imeComposing = false;
 	BufferID attachDefaultDoc();
 
 	//Store the current buffer so it can be retrieved later

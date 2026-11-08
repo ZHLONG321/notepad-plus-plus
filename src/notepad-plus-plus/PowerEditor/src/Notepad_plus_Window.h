@@ -65,6 +65,10 @@ public:
 
 	bool isDlgsMsg(MSG *msg) const;
 	void onEditorPainted() { _startupEditorPainted = true; }
+	bool isEditorComposing() const {
+		return _notepad_plus_plus_core._mainEditView.isImeComposing() ||
+			_notepad_plus_plus_core._subEditView.isImeComposing();
+	}
 	void onInputMessage(const MSG& msg) {
 		// Resolve configured application shortcuts before translating this key.
 		if (_startupTimer && (msg.message == WM_KEYDOWN || msg.message == WM_SYSKEYDOWN) &&
