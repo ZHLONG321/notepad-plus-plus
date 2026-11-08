@@ -117,6 +117,7 @@ SET(src_files
 			./localization.cpp
 			./MISC/Exception/MiniDumper.cpp
 			./Notepad_plus.cpp
+			./StartupImeWindows.cpp
 			./Notepad_plus_Window.cpp
 			./NppBigSwitch.cpp
 			./NppCommands.cpp

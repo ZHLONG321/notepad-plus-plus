@@ -453,6 +453,7 @@ copy ..\src\contextMenu.xml ..\binarm64\contextMenu.xml
     <ClCompile Include="..\src\localization.cpp" />
     <ClCompile Include="..\src\MISC\Exception\MiniDumper.cpp" />
     <ClCompile Include="..\src\Notepad_plus.cpp" />
+    <ClCompile Include="..\src\StartupImeWindows.cpp" />
     <ClCompile Include="..\src\Notepad_plus_Window.cpp" />
     <ClCompile Include="..\src\NppBigSwitch.cpp" />
     <ClCompile Include="..\src\NppCommands.cpp" />

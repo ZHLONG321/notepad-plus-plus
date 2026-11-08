@@ -81,15 +81,15 @@ notepad++.exe -simple
 
 ## 隐藏窗口的系统成本
 
-### 隔离 QQ 代理诊断
+### 程序自身的输入法窗口优化
 
-诊断构建可定义 `NPP_QQ_PROXY_PROBE`，同时定义 `NPP_STARTUP_PROFILE_PROBE` 可按进程选定输入法。普通构建不包含这些入口。
+普通构建直接包含窗口优化，不需要额外代理、QQ 项目、环境变量或指定输入法。程序仍由 Windows 加载当前输入法。当前界面线程的窗口创建通知只观察已经加载的组件；确认窗口属于 QQ 引擎后，核对它的 Windows 窗口导入，再处理后续符合条件的隐藏窗口。微软拼音及其他输入法继续使用原路径，没有安装 QQ 也可正常启动。
 
-`QQ_TEST_TSF_PATH` 指向本机注册的 QQ TSF 组件，`QQ_TEST_PROXY_PATH` 指向项目内代理；代理同目录需要原引擎副本 `QQPinyinOriginal.dll`。进程在应用入口核对 TSF 的 `LoadLibraryW` 导入，只重定向它对 `QQPinyin.ime` 的请求，退出时恢复导入地址。入口失败则以非零退出，不切换到另一套输入法继续计分。代理来源及其按进程启用方式见 [QQ Pinyin Enhance](https://github.com/ZHLONG321/qq-pinyin-enhance)。这个路径不更改系统安装或注册信息。
+第一个被观察的 QQ 窗口按原方式创建，后续属于同一引擎、带 `CS_IME`、同线程拥有者且没有菜单的隐藏弹出窗口先作为子窗口创建。首次显示、移动、读取几何或修改相关样式前恢复弹出窗口。窗口回调和导入处理全部在本程序内，系统输入法文件及用户默认输入法不变。导入不符合预期时保留原调用，不阻止编辑器启动。
 
-该构建通过注册消息 `Notepad.StartupImeProbe.93249AC7-8C55-4464-83B7-412D8A633C94`，在拥有编辑区的线程读取 IMM 状态。`wParam` 为本窗口所属的 Scintilla 句柄；`lParam` 为 1/2/3 时读取开启状态、转换模式、句子模式，4/5 时关闭或开启该编辑区输入法。失败返回 -1。它允许首字检查在插件加载前核实和还原输入法状态，不用等待 PythonScript 等插件。
+窗口创建通知使用当前线程的 `WH_CBT`。微软文档说明 [HCBT_CREATEWND](https://learn.microsoft.com/en-us/windows/win32/winmsg/cbtproc) 在 `WM_NCCREATE` 与 `WM_CREATE` 前触发；此时第一个窗口已经开始创建，所以不能把全部窗口创建成本视为已经推迟。记录 `inputServices.imeWindows.installed`、`deferred` 和 `restored`，并用实际候选列表和文字画面验证结果。源码为 `StartupImeWindows.cpp`。
 
-对照使用同一诊断程序和原引擎，只改变 QQ 代理的启用设置。真实中文输入、实际模块路径、编辑区像素、前台恢复和最终插件加载分别记录。采集器附加可能推迟输入，宜与发键并行并记录附加时间；程序的文字内容、窗口可见或内部显示提交均不能替代首次可见文字的画面。原生编辑框的收益不能直接当作 Notepad++ 成绩。
+输入法选择与状态诊断可在专用构建中定义 `NPP_STARTUP_PROFILE_PROBE`。注册消息 `Notepad.StartupImeProbe.93249AC7-8C55-4464-83B7-412D8A633C94` 在编辑区所属线程读取 IMM 状态；`wParam` 是本窗口内的 Scintilla 句柄，`lParam` 为 1/2/3 时读取开启状态、转换模式、句子模式，4/5 时关闭或开启该编辑区输入法，失败返回 -1。普通构建不接受该消息。
 
 比较不同输入法时，在同一诊断程序中按进程选择已启用的 TSF 配置，并在窗口显示前后核对实际 GUID；不改用户默认输入法。内部焦点对照可以关闭采集和按键，单独记录焦点调用与显示提交。不同程序版本、不同测试批次的差值不能直接作为某项改动的收益；失败轮次中的真实慢调用也应保留。
 
@@ -113,17 +113,9 @@ cl /nologo /std:c++17 /EHsc /O2 /MT /Zi /utf-8 ref/notepad-startup-analysis/scri
 
 ## 测量输入
 
-编译定义 `NPP_QQ_PROXY_PROBE` 可用于本进程内的 QQ 代理对照。只有同时提供 `QQ_TEST_PROXY_PATH` 和 `QQ_TEST_TSF_PATH` 才安装重定向；不提供时照常使用系统输入法，程序可以直接启动。只提供一个路径或安装失败仍报错退出，避免把失败的实验混作原样结果。原版输入法和插件文件不需要改动。
+日常启动直接运行构建后的程序，沿用系统输入法。测量也使用同一程序，记录实际加载的输入法组件，避免把输入法切换或额外加载的成本混入比较。原版输入法和插件文件不需要改动。
 
-输入法状态的诊断消息另需 `NPP_STARTUP_PROFILE_PROBE`；仅启用 QQ 代理构建不会接受该消息，也不会主动选择输入法配置。真实输入测量可在自有测试线程安装短时原生消息钩子，读取、临时开启并恢复 IMM 状态，同时用 TSF 接口确认当前输入法。这个钩子的等待时间和窗口采集的准备时间都应保留在原始数据中，不从总时间任意扣除。
-
-可选 QQ 代理构建使用本目录的 `qq-proxy.props`，只开启进程内重定向，不包含输入法选择或初始窗口保护对照开关。完成上面的会话准备后，从项目根执行以下命令；将 `SESSION_ID` 换为自己的会话目录名。Python 在运行时取得属性文件的完整路径，保证 MSBuild 的各个子项目使用同一个文件：
-
-```text
-uv run --offline --no-project python -c "from pathlib import Path; import subprocess; p=Path('ref/notepad-startup-analysis/qq-proxy.props').resolve(); raise SystemExit(subprocess.call(['uv','run','--offline','--no-project','python','tmp/SESSION_ID/build.py','npp','/p:ForceImportBeforeCppTargets='+str(p)]))"
-```
-
-代理本身在 QQ Pinyin Enhance 仓库通过 `build.py` 独立构建；原引擎副本与代理放在同一隔离目录。运行时只向该进程提供 `QQ_TEST_PROXY_PATH`、`QQ_TEST_TSF_PATH` 和 `QQ_PINYIN_LAZY_WINDOWS=1`。不设置这些变量时，程序照常使用系统输入法。不要把性能对照需要的分段记录和状态查询开关加入日常启动入口。
+真实输入检查可在自有测试线程安装短时原生消息钩子，读取、临时开启并恢复 IMM 状态，同时用 TSF 接口确认当前输入法。跨输入法兼容性检查只在隔离进程选择本机已经启用的配置，使用 `TF_IPPMF_FORPROCESS`，不改变用户默认设置。这类启动后切换的检查用于验证兼容性，不计启动成绩。
 
 测量脚本以会话目录为数据根，需要下面的本地输入：
 
