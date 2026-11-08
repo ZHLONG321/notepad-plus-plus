@@ -32,7 +32,8 @@ using namespace std;
 BOOL Notepad_plus::notify(SCNotification *notification)
 {
 	static bool startupInputSeen = false;
-	if (notification->nmhdr.code == SCN_CHARADDED)
+	if (notification->nmhdr.code == SCN_CHARADDED &&
+		notification->characterSource != SC_CHARACTERSOURCE_TENTATIVE_INPUT)
 	{
 		startupInputSeen = true;
 		startupTrace("editor.char_added");
@@ -669,6 +670,10 @@ BOOL Notepad_plus::notify(SCNotification *notification)
 
 		case SCN_CHARADDED:
 		{
+			// Preedit belongs to the IME until committed. Host edits and completion
+			// must not modify it; plugins have already received the original event.
+			if (notification->characterSource == SC_CHARACTERSOURCE_TENTATIVE_INPUT)
+				break;
 			if (!_recordingMacro && !_playingBackMacro) // No macro recording or playing back
 			{
 				const NppGUI & nppGui = NppParameters::getInstance().getNppGUI();

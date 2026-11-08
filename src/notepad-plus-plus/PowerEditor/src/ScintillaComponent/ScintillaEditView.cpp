@@ -227,6 +227,8 @@ void ScintillaEditView::init(HINSTANCE hInst, HWND hPere)
 		throw std::runtime_error("ScintillaEditView::init : SCI_GETDIRECTPOINTER message failed");
 	}
 	startupTrace("editor.init.directAccess.ready");
+	// Handle preedit text in the themed editor, without a default IME window.
+	execute(SCI_SETIMEINTERACTION, SC_IME_INLINE);
 	// Seed the selected theme before any plugin or parent can expose this view.
 	StyleArray& startupStyles = NppParameters::getInstance().getMiscStylerArray();
 	int startupDefault = startupStyles.getStylerIndexByID(STYLE_DEFAULT);
@@ -378,6 +380,9 @@ LRESULT ScintillaEditView::scintillaNew_Proc(HWND hwnd, UINT Message, WPARAM wPa
 			// Candidate selection remains input activity even without queued keys.
 			_imeComposing = true;
 			startupTrace("editor.composition.begin");
+			// A preedit space must not accept an already open completion list.
+			if (execute(SCI_GETIMEINTERACTION) == SC_IME_INLINE)
+				execute(SCI_AUTOCCANCEL);
 			break;
 
 		case WM_IME_ENDCOMPOSITION:
