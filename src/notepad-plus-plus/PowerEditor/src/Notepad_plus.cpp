@@ -336,6 +336,8 @@ LRESULT Notepad_plus::init(HWND hwnd, bool incremental)
 	if (_coreInitStage == CoreInitStage::views)
 	{
 	startupTrace("core.init.begin");
+	_toolBar.prepareIcons(_pPublicInterface->getHinst(), nppGUI._toolBarStatus,
+		toolBarIcons, sizeof(toolBarIcons) / sizeof(ToolBarButtonUnit));
 	// Menu
 	if (!_startupEditorOnly)
 		_mainMenuHandle = ::GetMenu(hwnd);

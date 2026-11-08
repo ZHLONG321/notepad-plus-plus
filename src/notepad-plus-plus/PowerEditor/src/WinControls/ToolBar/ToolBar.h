@@ -21,6 +21,7 @@
 #include "Window.h"
 #include "Notepad_plus_msgs.h"
 #include "ImageListSet.h"
+#include <future>
 
 #define REBAR_BAR_TOOLBAR		0
 #define REBAR_BAR_SEARCH		1
@@ -53,6 +54,7 @@ public :
 	~ToolBar() = default;
 
     void initTheme(TiXmlDocument *toolIconsDocRoot);
+	void prepareIcons(HINSTANCE hInst, toolBarStatusType type, ToolBarButtonUnit* buttons, int count);
 	virtual bool init(HINSTANCE hInst, HWND hPere, toolBarStatusType type, 
 		ToolBarButtonUnit *buttonUnitArray, int arraySize);
 
@@ -105,6 +107,8 @@ public :
 private :
 	TBBUTTON *_pTBB = nullptr;
 	ToolBarIcons _toolBarIcons;
+	std::future<void> _preparedIcons;
+	int _preparedIconSize = 0;
 	toolBarStatusType _state = TB_SMALL;
 	std::vector<DynamicCmdIcoBmp> _vDynBtnReg;
 	bool _dynamicButtonsDirty = false;

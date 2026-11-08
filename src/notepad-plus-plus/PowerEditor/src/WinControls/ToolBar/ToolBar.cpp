@@ -96,6 +96,36 @@ void ToolBar::initTheme(TiXmlDocument *toolIconsDocRoot)
 	}
 }
 
+void ToolBar::prepareIcons(HINSTANCE hInst, toolBarStatusType type, ToolBarButtonUnit* buttons, int count)
+{
+	if (type == TB_STANDARD)
+		return;
+	_preparedIconSize = NppParameters::getInstance()._dpiManager.scaleX(
+		type == TB_LARGE || type == TB_LARGE2 ? 32 : 16);
+	const int size = _preparedIconSize;
+	const bool dark = NppDarkMode::isEnabled();
+	// Only the worker owns these image lists until init() joins it. HWNDs and
+	// plugin callbacks stay on the UI thread. Deferred execution also works
+	// when the standard library cannot start an asynchronous task.
+	_preparedIcons = std::async(std::launch::async | std::launch::deferred,
+		[this, hInst, type, buttons, count, size, dark]() {
+			StartupTraceScope trace(L"toolbar.prepareImages");
+			_toolBarIcons.init(buttons, count, {});
+			_toolBarIcons.create(hInst, size);
+			if (type == TB_SMALL || type == TB_LARGE)
+			{
+				if (dark) { _toolBarIcons.getDefaultLstDM(); _toolBarIcons.getDisableLstDM(); }
+				else { _toolBarIcons.getDefaultLst(); _toolBarIcons.getDisableLst(); }
+			}
+			else
+			{
+				if (dark) { _toolBarIcons.getDefaultLstSetDM2(); _toolBarIcons.getDisableLstSetDM2(); }
+				else { _toolBarIcons.getDefaultLstSet2(); _toolBarIcons.getDisableLstSet2(); }
+			}
+			::GdiFlush();
+		});
+}
+
 bool ToolBar::init( HINSTANCE hInst, HWND hPere, toolBarStatusType type, ToolBarButtonUnit *buttonUnitArray, int arraySize)
 {
 	Window::init(hInst, hPere);
@@ -103,8 +133,20 @@ bool ToolBar::init( HINSTANCE hInst, HWND hPere, toolBarStatusType type, ToolBar
 	_state = type;
 	int iconSize = NppParameters::getInstance()._dpiManager.scaleX(_state == TB_LARGE || _state == TB_LARGE2 ? 32 : 16);
 
-	_toolBarIcons.init(buttonUnitArray, arraySize, _vDynBtnReg);
-	_toolBarIcons.create(_hInst, iconSize);
+	if (_preparedIcons.valid())
+	{
+		StartupTraceScope trace(L"toolbar.waitForImages");
+		_preparedIcons.get();
+		if (iconSize != _preparedIconSize)
+			_toolBarIcons.resizeIcon(iconSize);
+		if (!_vDynBtnReg.empty())
+			_toolBarIcons.setDynamicIcons(_vDynBtnReg);
+	}
+	else
+	{
+		_toolBarIcons.init(buttonUnitArray, arraySize, _vDynBtnReg);
+		_toolBarIcons.create(_hInst, iconSize);
+	}
 	startupTrace("toolbar.icons.ready");
 	
 	INITCOMMONCONTROLSEX icex;
@@ -177,6 +219,8 @@ bool ToolBar::init( HINSTANCE hInst, HWND hPere, toolBarStatusType type, ToolBar
 
 void ToolBar::destroy()
 {
+	if (_preparedIcons.valid())
+		_preparedIcons.wait();
 	if (_pRebar)
 	{
 		_pRebar->removeBand(_rbBand.wID);
