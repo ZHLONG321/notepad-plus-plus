@@ -689,14 +689,17 @@ void Notepad_plus_Window::loadOneDelayedPlugin()
 	if (index < 0)
 		return;
 	startupTrace("begin", L"plugin.host.accelerators");
-	core._accelerator.updateShortcuts();
+	// The notifications below can also change the menu. Paint it once after
+	// both shortcut labels and plugin initialization have been applied.
+	core._accelerator.updateShortcuts(false);
 	startupTrace("end", L"plugin.host.accelerators");
 	startupTrace("begin", L"plugin.host.contextMenu");
 	NppParameters::getInstance().reloadContextMenuFromXmlTree(core._mainMenuHandle, manager.getMenuHandle());
 	startupTrace("end", L"plugin.host.contextMenu");
 	notifyDelayedPluginReady(index);
 	startupTrace("begin", L"plugin.host.drawMenuBar");
-	::DrawMenuBar(_hSelf);
+	if (::GetMenu(_hSelf))
+		::DrawMenuBar(_hSelf);
 	startupTrace("end", L"plugin.host.drawMenuBar");
 	startupTrace("plugin.delayed.ready");
 }

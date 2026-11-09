@@ -531,7 +531,7 @@ INT_PTR CALLBACK Shortcut::run_dlgProc(UINT Message, WPARAM wParam, LPARAM lPara
 }
 
 // return true if one of CommandShortcuts is deleted. Otherwise false.
-void Accelerator::updateShortcuts() 
+void Accelerator::updateShortcuts(bool redrawMenuBar)
 {
 	const array<unsigned long, 3> incrFindAccIds = { IDM_SEARCH_FINDNEXT, IDM_SEARCH_FINDPREV, IDM_SEARCH_FINDINCREMENT };
 
@@ -609,7 +609,7 @@ void Accelerator::updateShortcuts()
 
 	_nbAccelItems = offset;
 
-	updateFullMenu();
+	updateFullMenu(redrawMenuBar);
 	
 	//update the table
 	if (_hAccTable)
@@ -647,7 +647,7 @@ void Accelerator::updateShortcuts()
 	return;
 }
 
-void Accelerator::updateFullMenu()
+void Accelerator::updateFullMenu(bool redrawMenuBar)
 {
 	NppParameters& nppParam = NppParameters::getInstance();
 	vector<CommandShortcut> commands = nppParam.getUserShortcuts();
@@ -674,18 +674,33 @@ void Accelerator::updateFullMenu()
 		updateMenuItemByCommand(pcommands[i]);
 	}
 
-	::DrawMenuBar(_hMenuParent);
+	if (redrawMenuBar && ::GetMenu(_hMenuParent))
+		::DrawMenuBar(_hMenuParent);
 }
 
 void Accelerator::updateMenuItemByCommand(const CommandShortcut& csc)
 {
 	int cmdID = csc.getID();
+	const generic_string text = csc.toMenuItemString();
+	// Delayed plugins update the accelerator table one at a time. Most labels
+	// already match; rewriting them invalidates the whole menu repeatedly.
+	MENUITEMINFO item = {sizeof(item)};
+	item.fMask = MIIM_STRING | MIIM_FTYPE;
+	if (::GetMenuItemInfo(_hAccelMenu, cmdID, FALSE, &item) &&
+		!(item.fType & (MFT_BITMAP | MFT_OWNERDRAW | MFT_SEPARATOR)) && item.cch == text.size())
+	{
+		generic_string current(item.cch + 1, 0);
+		item.dwTypeData = &current[0];
+		++item.cch;
+		if (::GetMenuItemInfo(_hAccelMenu, cmdID, FALSE, &item) && text == current.c_str())
+			return;
+	}
 	
-	// Ensure that the menu item checks set prior to this update remain in affect.
-	// Ensure that the menu item state is also maintained
-	UINT cmdFlags = GetMenuState(_hAccelMenu, cmdID, MF_BYCOMMAND );
-	cmdFlags = MF_BYCOMMAND | ((cmdFlags&MF_CHECKED) ? MF_CHECKED : MF_UNCHECKED) | ((cmdFlags&MF_DISABLED) ? MF_DISABLED : MF_ENABLED);
-	::ModifyMenu(_hAccelMenu, cmdID, cmdFlags, cmdID, csc.toMenuItemString().c_str());
+	// Shortcut changes only replace the text. Plugin-owned disabled, checked,
+	// radio-check and bitmap state must survive the label update.
+	item.fMask = MIIM_STRING;
+	item.dwTypeData = const_cast<TCHAR*>(text.c_str());
+	::SetMenuItemInfo(_hAccelMenu, cmdID, FALSE, &item);
 }
 
 recordedMacroStep::recordedMacroStep(int iMessage, uptr_t wParam, uptr_t lParam, int codepage)
